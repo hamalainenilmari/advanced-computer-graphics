@@ -82,7 +82,7 @@ void RayTracer::saveHierarchy(const char* filename, const std::vector<RTTriangle
 
 // create the axis-aligned bounding box for the group of objects
 AABB computeBB(std::vector<RTTriangle>& triangles) {
-    std::cout << "num triangles in bb compute: " << triangles.size() << std::endl;
+    //std::cout << "num triangles in bb compute: " << triangles.size() << std::endl;
     // compute bounding box of each triangle
     std::vector<Vec3f> mins;
     std::vector<Vec3f> maxs;
@@ -106,24 +106,37 @@ AABB computeBB(std::vector<RTTriangle>& triangles) {
 }
 
 void partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<RTTriangle>& left, std::vector<RTTriangle>& right, AABB bb) {
-    // pick the longest axis of current node's bb
-    float x = bb.max.x - bb.min.x;
-    float y = bb.max.y - bb.min.y;
-    float z = bb.max.z - bb.min.z;
+    // AABB of centroids to create actual split
+    std::vector<Vec3f> centroids;
+    for (const RTTriangle& triangle : triangles) {
+        centroids.push_back(triangle.centroid());
+    }
+    Vec3f centroidMin = centroids[0];
+    Vec3f centroidMax = centroids[0];
+    for (const Vec3f& centroid : centroids) {
+        centroidMin.x = std::min(centroidMin.x, centroid.x);
+        centroidMin.y = std::min(centroidMin.y, centroid.y);
+        centroidMin.z = std::min(centroidMin.z, centroid.z);
 
-    float max = std::max({ x,y,z });
-
-    std::cout << "x: " << x << " y: " << y << " z: " << z << " max: " << max << std::endl;
-
-    float midX = (bb.min.x + bb.max.x) / 2;
-    float midY = (bb.min.y + bb.max.y) / 2;
-    float midZ = (bb.min.z + bb.max.z) / 2;
-    for (RTTriangle& triangle : triangles) {
-        std::cout << triangle.m_vertices[0].p << triangle.m_vertices[1].p << triangle.m_vertices[2].p << std::endl;
+        centroidMax.x = std::max(centroidMax.x, centroid.x);
+        centroidMax.y = std::max(centroidMax.y, centroid.y);
+        centroidMax.z = std::max(centroidMax.z, centroid.z);
     }
 
+    // longest axis
+    float x = centroidMax.x - centroidMin.x;
+    float y = centroidMax.y - centroidMin.y;
+    float z = centroidMax.z - centroidMin.z;
+    float max = std::max({ x, y, z });
+
+    //std::cout << "x: " << x << " y: " << y << " z: " << z << " max: " << max << std::endl;
+
+    float midX = (centroidMin.x + centroidMax.x) / 2;
+    float midY = (centroidMin.y + centroidMax.y) / 2;
+    float midZ = (centroidMin.z + centroidMax.z) / 2;
+
     if (max == x) {
-        std::cout << "we in x" << std::endl;
+        //std::cout << "we in x" << std::endl;
         for (RTTriangle& triangle : triangles) {
             // if triangle centroid is on the left side of the bb divided by half in x axis, add to left list
             if (triangle.centroid().x < midX) {
@@ -136,7 +149,7 @@ void partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<RTTrian
         }
     }
     else if (max == y) {
-        std::cout << "we in y" << std::endl;
+        //std::cout << "we in y" << std::endl;
 
         for (RTTriangle& triangle : triangles) {
             // if triangle centroid is on the left side of the bb divided by half in x axis, add to left list
@@ -150,11 +163,11 @@ void partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<RTTrian
         }
     }
     else {
-        std::cout << "we in z" << std::endl;
+        //std::cout << "we in z" << std::endl;
 
         for (RTTriangle& triangle : triangles) {
             // if triangle centroid is on the left side of the bb divided by half in x axis, add to left list
-            std::cout << "z: " << z << " midZ: " << midZ << std::endl;
+            //std::cout << "z: " << z << " midZ: " << midZ << std::endl;
             if (triangle.centroid().z < midZ) {
                 left.push_back(triangle);
             }
@@ -170,12 +183,12 @@ void partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<RTTrian
 void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode, BvhNode& node) { // we need list of all primitives in the scene & root node
     // YOUR CODE HERE (R1):
     // This is where you should construct your BVH.
-    // 
-    // check if bvh has been initalized to raytracer
-    m_triangles = &triangles;
 
+    // check if bvh has been initalized to raytracerccs
     if (!m_bvhInitalized) {
-        std::cout << "not initalized, initalizins" << std::endl;
+        m_triangles = &triangles;
+
+        //std::cout << "not initalized, initalizins" << std::endl;
         // if not, create initial bvh
         size_t start = 0;
         size_t end = m_triangles->size() - 1; // index of "last" triangle in the scene
@@ -185,12 +198,12 @@ void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode
         constructHierarchy(triangles, splitMode, m_bvh.root());
 
     }
-    std::cout << "recursion" << std::endl;
+    //std::cout << "recursion" << std::endl;
 
     //m_triangles = &triangles;
 
     node.bb = computeBB(triangles); // bounding box of the node
-    std::cout << "computed bb: " << node.bb << " for list size: " << triangles.size() << std::endl;
+    //std::cout << "computed bb: " << node.bb << " for list size: " << triangles.size() << std::endl;
     node.left = NULL;
     node.right = NULL;
 
