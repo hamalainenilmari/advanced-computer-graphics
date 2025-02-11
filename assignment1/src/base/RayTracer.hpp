@@ -28,12 +28,12 @@ public:
                         RayTracer				(void);
                         ~RayTracer				(void);
 
-						void					constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode);
+	void				constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode, BvhNode& node);
 
     void				saveHierarchy			(const char* filename, const std::vector<RTTriangle>& triangles);
     void				loadHierarchy			(const char* filename, std::vector<RTTriangle>& triangles);
 
-    RaycastResult		raycast					(const Vec3f& orig, const Vec3f& dir) const;
+    RaycastResult		raycast					(const Vec3f& orig, const Vec3f& dir) /*const*/ ;     // TODO check the const!
 
     // This function computes an MD5 checksum of the input scene data,
     // WITH the assumption that all vertices are allocated in one big chunk.
@@ -43,10 +43,13 @@ public:
 
 	void resetRayCounter() { m_rayCount = 0; }
 	int getRayCount() { return m_rayCount; }
+    bool hasBeenInitalized() { return m_bvhInitalized; }
+    void initalizeBvh() { m_bvhInitalized = true; }
 
 private:
 	mutable std::atomic<int> m_rayCount;
 	Bvh m_bvh;
+    bool m_bvhInitalized = false;
 };
 
 

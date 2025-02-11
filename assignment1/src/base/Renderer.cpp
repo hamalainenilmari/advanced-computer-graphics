@@ -67,7 +67,7 @@ timingResult Renderer::rayTracePicture( RayTracer* rt, Image* image, const Camer
 
 	// YOUR CODE HERE(R5):
 	// remove this to enable multithreading (you also need to enable it in the project properties: C++/Language/Open MP support)
-	//#pragma omp parallel for
+	#pragma omp parallel for
     for ( int j = 0; j < height; ++j )
     {
         // Each thread must have its own random generator
@@ -163,6 +163,7 @@ void Renderer::getTextureParameters(const RaycastResult& hit, Vec3f& diffuse, Ve
 		//diffuse = img.getVec4f(texelCoords).getXYZ();
 	}
 	Texture& normalTex = mat->textures[MeshBase::TextureType_Normal];
+	if (normalTex.exists() && m_normalMapped) //check whether material uses a normal map
 	if (normalTex.exists() && m_normalMapped) //check whether material uses a normal map
 	{
 		const Image& img = *normalTex.getImage();

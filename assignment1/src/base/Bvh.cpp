@@ -7,8 +7,16 @@
 
 namespace FW {
 
+Bvh::Bvh() {
+}
 
-Bvh::Bvh() { }
+Bvh::Bvh(SplitMode splitmode, size_t start, size_t end) {
+    mode_ = splitmode;
+    rootNode_ = std::make_unique<BvhNode>(start, end);
+    for (int i = start; i <= end; ++i) {
+        indices_.push_back(i);
+    }
+}
 
 
 // reconstruct from a file

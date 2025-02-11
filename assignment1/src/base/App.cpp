@@ -500,7 +500,7 @@ bool App::handleEvent(const Window::Event& ev)
 			m_renderer->setNormalMapping(m_normalMapped);
 			m_renderer->setTextureFiltering(m_filterTextures);
 			
-			m_renderer->rayTracePicture(m_rt.get(), m_rtImage.get(), m_cameraCtrl, (Renderer::ShadingMode)m_shadingMode);
+			m_renderer->rayTracePicture(m_rt.get(), m_rtImage.get(), m_cameraCtrl, (Renderer::ShadingMode)m_shadingMode); // .get() return the actual memory address of uniquer_ptr
 			m_RTTextureNeedsUpload = true;
 
 			m_showRTImage = true;
@@ -898,7 +898,9 @@ void App::constructTracer()
 			QueryPerformanceFrequency(&frequency);
 			QueryPerformanceCounter(&start); // Start time stamp		
 
-			m_rt->constructHierarchy(m_rtTriangles, m_settings.splitMode);
+			Bvh* bvh = new Bvh(m_settings.splitMode, 0, 0);
+			BvhNode& root = bvh->root();
+			m_rt->constructHierarchy(m_rtTriangles, m_settings.splitMode, root);
 
 			QueryPerformanceCounter(&stop); // Stop time stamp
 
@@ -917,7 +919,10 @@ void App::constructTracer()
 		QueryPerformanceFrequency(&frequency);
 		QueryPerformanceCounter(&start); // Start time stamp		
 		
-		m_rt->constructHierarchy(m_rtTriangles, m_settings.splitMode);
+		Bvh* bvh = new Bvh(m_settings.splitMode, 0, 0);
+		BvhNode& root = bvh->root();
+
+		m_rt->constructHierarchy(m_rtTriangles, m_settings.splitMode, root);
 
 		QueryPerformanceCounter(&stop); // Stop time stamp
 

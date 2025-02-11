@@ -16,6 +16,7 @@ class Bvh {
 public:
 
     Bvh();
+    Bvh(SplitMode splitmode, size_t start, size_t end);
     Bvh(std::istream& is);
 
     // move assignment for performance
@@ -25,6 +26,8 @@ public:
         std::swap(indices_, other.indices_);
         return *this;
     }
+
+    SplitMode           splitMode() const { return mode_; }
 
     BvhNode&			root() { return *rootNode_; }
     const BvhNode&		root() const { return *rootNode_; }
