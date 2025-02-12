@@ -70,7 +70,6 @@ void RayTracer::loadHierarchy(const char* filename, std::vector<RTTriangle>& tri
 {
 	std::ifstream ifs(filename, std::ios::binary);
     m_bvh = Bvh(ifs);
-
     m_triangles = &triangles;
 }
 
@@ -83,7 +82,16 @@ void RayTracer::saveHierarchy(const char* filename, const std::vector<RTTriangle
 
 // create the axis-aligned bounding box for the group of objects
 AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end) {
+
+    if (start >= end || start >= indiceList.size() || end > indiceList.size() || indiceList.empty()) {
+        return AABB(Vec3f(0, 0, 0), Vec3f(0, 0, 0));
+    }
+
     // initalize min point and max point of bb by first triangle
+    if (indiceList[start] >= triangles.size()) {
+        return AABB(Vec3f(0, 0, 0), Vec3f(0, 0, 0));
+    }
+    
     Vec3f min = triangles[indiceList[start]].min();
     Vec3f max = triangles[indiceList[start]].max();
 
@@ -98,7 +106,7 @@ AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indice
         max.y = std::max(max.y, tri.max().y);
         max.z = std::max(max.z, tri.max().z);
     }
-
+    
     return AABB(min, max);
 }
 
@@ -106,6 +114,10 @@ void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vec
     // AABB of centroids to create actual split
 
     // initalize min point and max point of bb by first triangle centroid
+    if (start >= end || start >= indiceList.size() || end > indiceList.size() || indiceList.empty()) {
+        // Return an empty AABB or throw an exception
+        return;
+    }
     Vec3f centroidMin = triangles[indiceList[start]].centroid();
     Vec3f centroidMax = centroidMin;
 
@@ -150,6 +162,11 @@ void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vec
     }
     // leftSide contains the index of first element in right side partition, midpoint
     mid = leftSide;
+
+    // in case of infinite loop by bad split
+    if (mid == start || mid == end) {
+        mid = start + (end - start) / 2; 
+    }
 }
 
 
@@ -158,7 +175,6 @@ void RayTracer:: constructBvh(std::vector<RTTriangle>& triangles, std::vector<ui
     node.left = nullptr;
     node.right = nullptr;
     uint32_t triCount = end - start;
-
     if (triCount > 3) { // TODO check the minimum size later
 
         // Instead of sorting the triangle list when building your hierarchy,
@@ -183,15 +199,13 @@ void RayTracer:: constructBvh(std::vector<RTTriangle>& triangles, std::vector<ui
 void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode) {
     // YOUR CODE HERE (R1):
     // This is where you should construct your BVH.
-
     // check if bvh has been initalized in raytracer
+    
     if (!m_bvhInitalized) {
         // if not, create initial bvh
         m_triangles = &triangles;
-   
         uint32_t start = 0;
         uint32_t end = m_triangles->size(); // index of "last" triangle in the scene TODO -1 ???
-
         m_bvh = Bvh(splitMode, start, end);
         m_bvhInitalized = true;
 
