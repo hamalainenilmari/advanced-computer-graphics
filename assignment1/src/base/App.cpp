@@ -898,9 +898,7 @@ void App::constructTracer()
 			QueryPerformanceFrequency(&frequency);
 			QueryPerformanceCounter(&start); // Start time stamp		
 
-			Bvh* bvh = new Bvh(m_settings.splitMode, 0, 0);
-			BvhNode& root = bvh->root();
-			m_rt->constructHierarchy(m_rtTriangles, m_settings.splitMode, root);
+			m_rt->constructHierarchy(m_rtTriangles, m_settings.splitMode);
 
 			QueryPerformanceCounter(&stop); // Stop time stamp
 
@@ -919,10 +917,8 @@ void App::constructTracer()
 		QueryPerformanceFrequency(&frequency);
 		QueryPerformanceCounter(&start); // Start time stamp		
 		
-		Bvh* bvh = new Bvh(m_settings.splitMode, 0, 0);
-		BvhNode& root = bvh->root();
 
-		m_rt->constructHierarchy(m_rtTriangles, m_settings.splitMode, root);
+		m_rt->constructHierarchy(m_rtTriangles, m_settings.splitMode);
 
 		QueryPerformanceCounter(&stop); // Stop time stamp
 

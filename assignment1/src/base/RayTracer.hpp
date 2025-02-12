@@ -28,12 +28,17 @@ public:
                         RayTracer				(void);
                         ~RayTracer				(void);
 
-	void				constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode, BvhNode& node);
+	void				constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode);
 
     void				saveHierarchy			(const char* filename, const std::vector<RTTriangle>& triangles);
     void				loadHierarchy			(const char* filename, std::vector<RTTriangle>& triangles);
 
     RaycastResult		raycast					(const Vec3f& orig, const Vec3f& dir) /*const*/ ;     // TODO check the const!
+
+    void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb);
+    void RayTracer::constructBvh(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, BvhNode& node, uint32_t start, uint32_t end);
+    RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, BvhNode& node);
+    bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& node);
 
     // This function computes an MD5 checksum of the input scene data,
     // WITH the assumption that all vertices are allocated in one big chunk.

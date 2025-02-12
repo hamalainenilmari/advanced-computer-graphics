@@ -11,6 +11,7 @@
 
 #include "BvhNode.hpp"
 #include "rtutil.hpp"
+#include <algorithm>
 
 // Helper function for hashing scene data for caching BVHs
 extern "C" void MD5Buffer( void* buffer, size_t bufLen, unsigned int* pDigest );
@@ -81,153 +82,219 @@ void RayTracer::saveHierarchy(const char* filename, const std::vector<RTTriangle
 }
 
 // create the axis-aligned bounding box for the group of objects
-AABB computeBB(std::vector<RTTriangle>& triangles) {
-    //std::cout << "num triangles in bb compute: " << triangles.size() << std::endl;
-    // compute bounding box of each triangle
-    std::vector<Vec3f> mins;
-    std::vector<Vec3f> maxs;
-    for (RTTriangle& triangle : triangles) {
-        // the lower left corner of triangles BB
-        mins.push_back(triangle.min());
-        // the upper right corner
-        maxs.push_back(triangle.max());
+AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end) {
+    // initalize min point and max point of bb by first triangle
+    Vec3f min = triangles[indiceList[start]].min();
+    Vec3f max = triangles[indiceList[start]].max();
+
+    for (uint32_t i = start; i < end; ++i) {
+        // update the min/max point coordinates according to the current min/max
+        RTTriangle tri = triangles[indiceList[i]];
+        min.x = std::min(min.x, tri.min().x);
+        min.y = std::min(min.y, tri.min().y);
+        min.z = std::min(min.z, tri.min().z);
+
+        max.x = std::max(max.x, tri.max().x);
+        max.y = std::max(max.y, tri.max().y);
+        max.z = std::max(max.z, tri.max().z);
     }
-    // compute bounding box for the group of objects from the min of mins and max maxs
-    float minX = std::min_element(mins.begin(), mins.end(), [](const Vec3f& a, const Vec3f& b) { return a.x < b.x; })->x;
-    float minY = std::min_element(mins.begin(), mins.end(), [](const Vec3f& a, const Vec3f& b) { return a.y < b.y; })->y;
-    float minZ = std::min_element(mins.begin(), mins.end(), [](const Vec3f& a, const Vec3f& b) { return a.z < b.z; })->z;
 
-    float maxX = std::max_element(maxs.begin(), maxs.end(), [](const Vec3f& a, const Vec3f& b) { return a.x < b.x; })->x;
-    float maxY = std::max_element(maxs.begin(), maxs.end(), [](const Vec3f& a, const Vec3f& b) { return a.y < b.y; })->y;
-    float maxZ = std::max_element(maxs.begin(), maxs.end(), [](const Vec3f& a, const Vec3f& b) { return a.z < b.z; })->z;
-
-    AABB bb(Vec3f(minX, minY, minZ), Vec3f(maxX, maxY, maxZ));
-    return bb;
+    return AABB(min, max);
 }
 
-void partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<RTTriangle>& left, std::vector<RTTriangle>& right, AABB bb) {
+void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb) {
     // AABB of centroids to create actual split
-    std::vector<Vec3f> centroids;
-    for (const RTTriangle& triangle : triangles) {
-        centroids.push_back(triangle.centroid());
-    }
-    Vec3f centroidMin = centroids[0];
-    Vec3f centroidMax = centroids[0];
-    for (const Vec3f& centroid : centroids) {
-        centroidMin.x = std::min(centroidMin.x, centroid.x);
-        centroidMin.y = std::min(centroidMin.y, centroid.y);
-        centroidMin.z = std::min(centroidMin.z, centroid.z);
 
-        centroidMax.x = std::max(centroidMax.x, centroid.x);
-        centroidMax.y = std::max(centroidMax.y, centroid.y);
-        centroidMax.z = std::max(centroidMax.z, centroid.z);
+    // initalize min point and max point of bb by first triangle centroid
+    Vec3f centroidMin = triangles[indiceList[start]].centroid();
+    Vec3f centroidMax = centroidMin;
+
+    // get bb min, max points
+    for (uint32_t i = start; i < end; ++i) {
+        Vec3f ct = triangles[indiceList[i]].centroid();
+        centroidMin.x = std::min(centroidMin.x, ct.x);
+        centroidMin.y = std::min(centroidMin.y, ct.y);
+        centroidMin.z = std::min(centroidMin.z, ct.z);
+
+        centroidMax.x = std::max(centroidMax.x, ct.x);
+        centroidMax.y = std::max(centroidMax.y, ct.y);
+        centroidMax.z = std::max(centroidMax.z, ct.z);
     }
 
-    // longest axis
+    // get longest axis
     float x = centroidMax.x - centroidMin.x;
     float y = centroidMax.y - centroidMin.y;
     float z = centroidMax.z - centroidMin.z;
-    float max = std::max({ x, y, z });
+    float longestAxis = std::max({ x, y, z });
 
-    //std::cout << "x: " << x << " y: " << y << " z: " << z << " max: " << max << std::endl;
+    Vec3f midPlane = (centroidMin + centroidMax) * 0.5f;
 
-    float midX = (centroidMin.x + centroidMax.x) / 2;
-    float midY = (centroidMin.y + centroidMax.y) / 2;
-    float midZ = (centroidMin.z + centroidMax.z) / 2;
+    auto leftSide = start; // beginning of this nodes partition
+    auto rightSide = end - 1; // end
 
-    if (max == x) {
-        //std::cout << "we in x" << std::endl;
-        for (RTTriangle& triangle : triangles) {
-            // if triangle centroid is on the left side of the bb divided by half in x axis, add to left list
-            if (triangle.centroid().x < midX) {
-                left.push_back(triangle);
-            }
-            // else add to right
-            else {
-                right.push_back(triangle);
-            }
+    // partition indexes of triangles based on the centroids
+    while (leftSide <= rightSide) {
+        const Vec3f& centroid = triangles[indiceList[leftSide]].centroid();
+
+        if (
+            (longestAxis == x && centroid.x < midPlane.x) ||
+            (longestAxis == y && centroid.y < midPlane.y) ||
+            (longestAxis == z && centroid.z < midPlane.z)
+            ) {
+                leftSide++; // triangle belongs in the left side partition, increase left side size
+        }
+        else {
+            std::swap(indiceList[leftSide], indiceList[rightSide]); //  triangle belons to the right, swap with one from the right side
+            rightSide--; // reduce right side partition size 
         }
     }
-    else if (max == y) {
-        //std::cout << "we in y" << std::endl;
-
-        for (RTTriangle& triangle : triangles) {
-            // if triangle centroid is on the left side of the bb divided by half in x axis, add to left list
-            if (triangle.centroid().y < midY) {
-                left.push_back(triangle);
-            }
-            // else add to right
-            else {
-                right.push_back(triangle);
-            }
-        }
-    }
-    else {
-        //std::cout << "we in z" << std::endl;
-
-        for (RTTriangle& triangle : triangles) {
-            // if triangle centroid is on the left side of the bb divided by half in x axis, add to left list
-            //std::cout << "z: " << z << " midZ: " << midZ << std::endl;
-            if (triangle.centroid().z < midZ) {
-                left.push_back(triangle);
-            }
-            // else add to right
-            else {
-                right.push_back(triangle);
-            }
-        }
-    }
-    std::cout << "Triangles: " << triangles.size() << ", Left: " << left.size() << ", Right: " << right.size() << std::endl;
+    // leftSide contains the index of first element in right side partition, midpoint
+    mid = leftSide;
 }
 
-void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode, BvhNode& node) { // we need list of all primitives in the scene & root node
+
+void RayTracer:: constructBvh(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, BvhNode& node, uint32_t start, uint32_t end) {
+    node.bb = computeBB(triangles, indiceList, start, end); // bounding box of the node
+    node.left = nullptr;
+    node.right = nullptr;
+    uint32_t triCount = end - start;
+
+    if (triCount > 3) { // TODO check the minimum size later
+
+        // Instead of sorting the triangle list when building your hierarchy,
+        // you should sort the index list, through which your Bvh traversal code should access the triangles.
+
+        uint32_t mid;
+        partitionPrimitives(triangles, indiceList, start,end, mid, node.bb);
+
+        node.left = std::make_unique<BvhNode>();
+        node.right = std::make_unique<BvhNode>();
+
+        constructBvh(triangles, indiceList, *node.left, start, mid);
+        constructBvh(triangles, indiceList, *node.right, mid, end);
+    }
+    else {
+        node.startPrim = start;
+        node.endPrim = end;
+    }
+}
+
+
+void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode) {
     // YOUR CODE HERE (R1):
     // This is where you should construct your BVH.
 
-    // check if bvh has been initalized to raytracerccs
+    // check if bvh has been initalized in raytracer
     if (!m_bvhInitalized) {
-        m_triangles = &triangles;
-
-        //std::cout << "not initalized, initalizins" << std::endl;
         // if not, create initial bvh
-        size_t start = 0;
-        size_t end = m_triangles->size() - 1; // index of "last" triangle in the scene
+        m_triangles = &triangles;
+   
+        uint32_t start = 0;
+        uint32_t end = m_triangles->size(); // index of "last" triangle in the scene TODO -1 ???
 
         m_bvh = Bvh(splitMode, start, end);
         m_bvhInitalized = true;
-        constructHierarchy(triangles, splitMode, m_bvh.root());
 
+        // then call the actual recursive builder with the root node
+        constructBvh(triangles, m_bvh.getIndices(), m_bvh.root(), start, end);
     }
-    //std::cout << "recursion" << std::endl;
-
-    //m_triangles = &triangles;
-
-    node.bb = computeBB(triangles); // bounding box of the node
-    //std::cout << "computed bb: " << node.bb << " for list size: " << triangles.size() << std::endl;
-    node.left = NULL;
-    node.right = NULL;
-
-    if (triangles.size() > 3) { // TODO check the size later
-        // partition the list of indexes of triangles into two lists of indexes
-        std::vector<RTTriangle> leftChildList;
-        std::vector<RTTriangle> rightChildList;
-            
-        partitionPrimitives(triangles, leftChildList, rightChildList, node.bb);
-
-        node.left = std::make_unique<BvhNode>();
-        constructHierarchy(leftChildList, splitMode, *node.left);
-
-        node.right = std::make_unique<BvhNode>();
-        constructHierarchy(rightChildList, splitMode, *node.right);
-    }
-    else {
-        return;
-        //node.startPrim = &triangles.front();
-        //node.endPrim = &triangles.back();
-    }
-
 }
 
+// traverse through the BVH and recursively check for intersections 
+RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, BvhNode& node) {
+    RaycastResult castresult;
+
+    // first check if ray intersects bb
+    if (!rayBBIntersect(orig, dir, node)) {
+        return castresult;
+    }
+
+    if (node.hasChildren()) {   
+        // intersect the bb, traverse children
+        RaycastResult resultLeft = traverseBvh(orig, dir, *node.left);
+        RaycastResult resultRight = traverseBvh(orig, dir, *node.right);
+
+        // return closer
+        return (resultLeft.t < resultRight.t) ? resultLeft : resultRight;
+    }
+    else {
+        // leaf node, check intersection between triangles in this node
+        float closest_t = 1.0f, closest_u = 0.0f, closest_v = 0.0f;
+        int closest_i = -1;
+        uint32_t i = 0;
+
+        // loop through the triangles in the child node
+        const std::vector<uint32_t>& indices = m_bvh.getIndices();
+        for (uint32_t i = node.startPrim; i < node.endPrim; ++i) { // TODO check if faster to call start, end once in the beginning
+            // TODO check if intersect between the bb?  Ax+By+Cz+D
+            float t, u, v;
+            const RTTriangle& tri = (*m_triangles)[indices[i]];
+            if (tri.intersect_woop(orig, dir, t, u, v))
+            {
+                if (t > 0.0f && t < closest_t)
+                {
+                    closest_i = indices[i];
+                    closest_t = t;
+                    closest_u = u;
+                    closest_v = v;
+                }
+            }
+        }
+        if (closest_i != -1) {
+            castresult = RaycastResult(&(*m_triangles)[closest_i], closest_t, closest_u, closest_v, orig + closest_t * dir, orig, dir);
+        }
+        return castresult;
+    }
+}
+
+// check if there is intersection between ray and bounding box
+bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& node) {
+    
+    // bounding box points
+    Vec3f minP = node.bb.min;
+    Vec3f maxP = node.bb.max;
+
+    // parallel check
+    if (dir.x == 0.0f) {
+        if (orig.x < minP.x || orig.x > maxP.x) {return false;}
+    }
+
+    if (dir.y == 0.0f) {
+        if (orig.y < minP.y || orig.y > maxP.y) {return false;}
+    }
+
+    if (dir.z == 0.0f) {
+        if (orig.z < minP.z || orig.z > maxP.z) {return false;}
+    }
+
+    // x interval
+    float t1_x = (minP.x - orig.x) / dir.x;
+    float t2_x = (maxP.x - orig.x) / dir.x;
+    if (t1_x > t2_x) std::swap(t1_x, t2_x);
+    
+    // y interval
+    float t1_y = (minP.y - orig.y) / dir.y;
+    float t2_y = (maxP.y - orig.y) / dir.y;
+    if (t1_y > t2_y) std::swap(t1_y, t2_y);
+
+    // z interval
+    float t1_z = (minP.z - orig.z) / dir.z;
+    float t2_z = (maxP.z - orig.z) / dir.z;
+    if (t1_z > t2_z) std::swap(t1_z, t2_z);
+
+    // final intersect interval: max of starts, min of ends
+    float t_start = std::max(std::max(t1_x, t1_y), t1_z);
+    float t_end = std::min(std::min(t2_x, t2_y), t2_z);
+    
+    // TODO check if we are behind box
+
+    // box is missed?
+    if (t_start > t_end) {
+        return false;
+    }
+
+    return true;
+}
 
 RaycastResult RayTracer::raycast(const Vec3f& orig, const Vec3f& dir) /*const*/ {  // TODO check the const!
 	++m_rayCount;
@@ -239,21 +306,22 @@ RaycastResult RayTracer::raycast(const Vec3f& orig, const Vec3f& dir) /*const*/ 
     // function with the given ray and your root node. You can also use this
     // function to do one-off things per ray like finding the elementwise
     // reciprocal of the ray direction.
-    
-    //SplitMode split = SplitMode_SpatialMedian;
 
-    //size_t start = 0;
-    //size_t end = m_triangles->size() - 1; // index of "last" triangle in the scene
+    RaycastResult castresult;
+    castresult =  traverseBvh(orig, dir, m_bvh.root());
 
-    //Bvh* bvh = new Bvh(split, start, end);
-    //BvhNode& root = bvh->root();
- 
-    //constructHierarchy(*m_triangles, split, root);
+    return castresult;
+}
+} // namespace FW
 
     // You can use this existing code for leaf nodes of the BVH (you do want to
     // change the range of the loop to match the elements the leaf covers.)
+
+    /*
     float closest_t = 1.0f, closest_u = 0.0f, closest_v = 0.0f;
     int closest_i = -1;
+
+
 
     RaycastResult castresult;
 
@@ -276,9 +344,5 @@ RaycastResult RayTracer::raycast(const Vec3f& orig, const Vec3f& dir) /*const*/ 
 
     if (closest_i != -1)
         castresult = RaycastResult(&(*m_triangles)[closest_i], closest_t, closest_u, closest_v, orig + closest_t *dir, orig, dir);
-    
-    return castresult;
-}
 
-
-} // namespace FW
+    */

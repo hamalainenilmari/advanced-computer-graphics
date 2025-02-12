@@ -16,7 +16,7 @@ class Bvh {
 public:
 
     Bvh();
-    Bvh(SplitMode splitmode, size_t start, size_t end);
+    Bvh(SplitMode splitmode, uint32_t start, uint32_t end);
     Bvh(std::istream& is);
 
     // move assignment for performance
@@ -27,14 +27,16 @@ public:
         return *this;
     }
 
-    SplitMode           splitMode() const { return mode_; }
+    SplitMode               splitMode() const { return mode_; }
 
-    BvhNode&			root() { return *rootNode_; }
-    const BvhNode&		root() const { return *rootNode_; }
+    BvhNode&			    root() { return *rootNode_; }
+    const BvhNode&		    root() const { return *rootNode_; }
 
-    void				save(std::ostream& os);
+    void				    save(std::ostream& os);
 
-	uint32_t			getIndex(uint32_t index) const { return indices_[index]; }
+	uint32_t			    getIndex(uint32_t index) const { return indices_[index]; }
+    std::vector<uint32_t>&	getIndices() { return indices_; }
+    void                    sortIndices(std::vector<uint32_t> list) { indices_ = list; }
 
 private:
 
