@@ -31,7 +31,6 @@ Vec2f getTexelCoords(Vec2f uv, const Vec2i size)
 	// to a range between 0 and 1 in order to support tiling textures, then
 	// scale the coordinates by image resolution and find the nearest pixel.
 
-    // sigmoid function
     float mappedX;
     float mappedY;
     //std::cout << "before: x: " << uv.x << ", y: " << uv.y << std::endl;

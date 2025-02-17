@@ -205,6 +205,26 @@ Vec4f Renderer::computeShadingAmbientOcclusion(RayTracer* rt, const RaycastResul
     Vec4f color;
 
     // YOUR CODE HERE (R4)
+	float t = hit.t;
+	Vec3f n(hit.tri->normal());
+	// camera is behind triangle, flip normal
+	if (cameraCtrl.getPosition().z > t) {
+		n = n * -1;
+	}
+	bool found = false;
+	Vec3f vec;
+	while (!found) {
+		Random random(rnd);
+		float x = random.getF32(-1.0, 1.0);
+		float y = random.getF32(-1.0, 1.0);
+		if (x * x + y * y <= 1) {
+			found = true;
+			vec.x = x;
+			vec.y = y;
+		}
+	}
+	vec.z = sqrt((1 - vec.x * vec.x - vec.y * vec.y));
+
 
     return color;
 }
