@@ -12,6 +12,7 @@
 #include "BvhNode.hpp"
 #include "rtutil.hpp"
 #include <algorithm>
+#include <cmath>
 
 // Helper function for hashing scene data for caching BVHs
 extern "C" void MD5Buffer( void* buffer, size_t bufLen, unsigned int* pDigest );
@@ -29,8 +30,28 @@ Vec2f getTexelCoords(Vec2f uv, const Vec2i size)
 	// UV coordinates range from negative to positive infinity. First map them
 	// to a range between 0 and 1 in order to support tiling textures, then
 	// scale the coordinates by image resolution and find the nearest pixel.
-    
-	return Vec2f();
+
+    // sigmoid function
+    float mappedX;
+    float mappedY;
+    //std::cout << "before: x: " << uv.x << ", y: " << uv.y << std::endl;
+
+    if (uv.x < 0) {
+        mappedX = -1.0f * uv.x - std::floor(-1.0f*uv.x);
+    }
+    else {
+        mappedX = uv.x - std::floor(uv.x);
+    }
+    if (uv.y < 0) {
+
+        mappedY = -1.0f * uv.y - std::floor(-1.0f*uv.y);
+    }
+    else {
+        mappedY = uv.y - std::floor(uv.y);
+    }
+    //std::cout << "x: " << mappedX << ", y: " << mappedY << std::endl;
+
+	return Vec2f(mappedX * size.x, mappedY * size.y);
 }
 
 Mat3f formBasis(const Vec3f& n) {
