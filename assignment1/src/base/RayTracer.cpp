@@ -57,23 +57,28 @@ Mat3f formBasis(const Vec3f& n) {
     // YOUR CODE HERE (R4):
     // generation of the rotation matrix R
     Mat3f R = Mat3f(.0f);
-    
-    R.m02 = n.x;
-    R.m12 = n.y;
-    R.m22 = n.z;
 
     // construct a unit vector T that is perpendicular to N by 
     // picking any vector Q that is not parallel to N,
     // taking the cross product Q × N, and normalizing
-
     Vec3f Q = n;
-    // set the smallest element of N to 1
+    // set the smallest element of Q to 1
     float x = std::abs(Q.x);
     float y = std::abs(Q.y);
     float z = std::abs(Q.z);
-    if (x < y && x < z) Q.x = 1.0;
-    else if (y < x && y < z) Q.y = 1.0;
-    else Q.z = 1.0;
+    if (x < y && x < z) { Q.x = 1.0f; }
+    else if (y < x && y < z) { Q.y = 1.0f; }
+    else { Q.z = 1.0f; }
+
+    float roundLimit = 0.01;
+    if (std::abs(Q.x - n.x) < roundLimit && std::abs(Q.y - n.y) < roundLimit && std::abs(Q.z - n.z) < roundLimit) { // in case of n being (1, 1, 1) and Q still equals n
+        if (x == std::abs(n.x)) {
+            Q = Vec3f(0, 1, 0);
+        }
+        else {
+            Q = Vec3f(1, 0, 0);
+        }
+    }
 
     Vec3f T = cross(Q, n).normalized();
 
@@ -86,6 +91,10 @@ Mat3f formBasis(const Vec3f& n) {
     R.m01 = B.x;
     R.m11 = B.y;
     R.m21 = B.z;
+
+    R.m02 = n.x;
+    R.m12 = n.y;
+    R.m22 = n.z;
 
     return R;
 }
@@ -280,6 +289,12 @@ RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, BvhNod
         RaycastResult resultLeft = traverseBvh(orig, dir, *node.left);
         RaycastResult resultRight = traverseBvh(orig, dir, *node.right);
 
+        if (resultLeft.tri == nullptr && resultRight.tri == nullptr) {
+            return castresult;
+        }
+        if (resultLeft.tri == nullptr) return resultRight;
+        if (resultRight.tri == nullptr) return resultLeft;
+
         // return closer
         return (resultLeft.t < resultRight.t) ? resultLeft : resultRight;
     }
@@ -292,7 +307,6 @@ RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, BvhNod
         // loop through the triangles in the child node
         const std::vector<uint32_t>& indices = m_bvh.getIndices();
         for (uint32_t i = node.startPrim; i < node.endPrim; ++i) { // TODO check if faster to call start, end once in the beginning
-            // TODO check if intersect between the bb?  Ax+By+Cz+D
             float t, u, v;
             const RTTriangle& tri = (*m_triangles)[indices[i]];
             if (tri.intersect_woop(orig, dir, t, u, v))
@@ -334,7 +348,7 @@ bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& nod
     }
 
     // x interval
-    float t1_x = (minP.x - orig.x) / dir.x;
+    float t1_x = (minP.x - orig.x) / dir.x; // t min x
     float t2_x = (maxP.x - orig.x) / dir.x;
     if (t1_x > t2_x) std::swap(t1_x, t2_x);
     

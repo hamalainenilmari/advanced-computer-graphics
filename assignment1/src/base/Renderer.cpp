@@ -208,7 +208,8 @@ Vec4f Renderer::computeShadingAmbientOcclusion(RayTracer* rt, const RaycastResul
 
 	Vec3f pos = cameraCtrl.getPosition() - hit.point;
 	// camera is behind triangle, flip normal
-	if (pos.dot(n) <= 0) {
+	
+	if (pos.dot(n) < 0) {
 		n = n * -1;
 	}
 	
@@ -235,7 +236,7 @@ Vec4f Renderer::computeShadingAmbientOcclusion(RayTracer* rt, const RaycastResul
 		Vec3f rotatedDir = rotationMat * randDir;
 
 		// nudge hit point slightly closer to camera to avoid rounding errors
-		RaycastResult hitAO = rt->raycast(hit.point + n * 0.001, rotatedDir * m_aoRayLength);
+		RaycastResult hitAO = rt->raycast(hit.point + ((cameraCtrl.getPosition() - hit.point) * 0.001), rotatedDir * m_aoRayLength);
 
 		if (hitAO.tri == nullptr ) // no hit
 		{
