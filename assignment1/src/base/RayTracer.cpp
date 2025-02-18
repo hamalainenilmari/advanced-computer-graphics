@@ -55,7 +55,39 @@ Vec2f getTexelCoords(Vec2f uv, const Vec2i size)
 
 Mat3f formBasis(const Vec3f& n) {
     // YOUR CODE HERE (R4):
-    return Mat3f();
+    // generation of the rotation matrix R
+    Mat3f R = Mat3f(.0f);
+    
+    R.m02 = n.x;
+    R.m12 = n.y;
+    R.m22 = n.z;
+
+    // construct a unit vector T that is perpendicular to N by 
+    // picking any vector Q that is not parallel to N,
+    // taking the cross product Q × N, and normalizing
+
+    Vec3f Q = n;
+    // set the smallest element of N to 1
+    float x = std::abs(Q.x);
+    float y = std::abs(Q.y);
+    float z = std::abs(Q.z);
+    if (x < y && x < z) Q.x = 1.0;
+    else if (y < x && y < z) Q.y = 1.0;
+    else Q.z = 1.0;
+
+    Vec3f T = cross(Q, n).normalized();
+
+    Vec3f B = cross(n, T).normalized();
+
+    R.m00 = T.x;
+    R.m10 = T.y;
+    R.m20 = T.z;
+
+    R.m01 = B.x;
+    R.m11 = B.y;
+    R.m21 = B.z;
+
+    return R;
 }
 
 

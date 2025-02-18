@@ -203,30 +203,49 @@ Vec4f Renderer::computeShadingHeadlight(const RaycastResult& hit, const CameraCo
 Vec4f Renderer::computeShadingAmbientOcclusion(RayTracer* rt, const RaycastResult& hit, const CameraControls& cameraCtrl, Random& rnd)
 {
     Vec4f color;
-
     // YOUR CODE HERE (R4)
-	float t = hit.t;
-	Vec3f n(hit.tri->normal());
+	Vec3f n(hit.tri->normal()); // surface normal
+
+	Vec3f pos = cameraCtrl.getPosition() - hit.point;
 	// camera is behind triangle, flip normal
-	if (cameraCtrl.getPosition().z > t) {
+	if (pos.dot(n) <= 0) {
 		n = n * -1;
 	}
-	bool found = false;
-	Vec3f vec;
-	while (!found) {
-		Random random(rnd);
-		float x = random.getF32(-1.0, 1.0);
-		float y = random.getF32(-1.0, 1.0);
-		if (x * x + y * y <= 1) {
-			found = true;
-			vec.x = x;
-			vec.y = y;
+	
+	int numNoHits = 0;
+	for (int i = 0; i < m_aoNumRays; ++i) {
+		bool found = false; // have we found suitable random direction
+		Vec3f randDir = Vec3f(.0f); // random ray direction
+
+		while (!found) {
+			float x = rnd.getF32(-1.0, 1.0);
+			float y = rnd.getF32(-1.0, 1.0);
+			if ( (x*x + y*y) <= 1.0) {
+				randDir.x = x;
+				randDir.y = y;
+				found = true;
+			}
+		}
+
+		randDir.z = std::sqrt((1.0 - (randDir.x * randDir.x) - (randDir.y * randDir.y) ));
+
+		// get rotation matrix
+		Mat3f rotationMat = formBasis(n);
+		// rotate direction to normal direction
+		Vec3f rotatedDir = rotationMat * randDir;
+
+		// nudge hit point slightly closer to camera to avoid rounding errors
+		RaycastResult hitAO = rt->raycast(hit.point + n * 0.001, rotatedDir * m_aoRayLength);
+
+		if (hitAO.tri == nullptr ) // no hit
+		{
+			numNoHits += 1;
 		}
 	}
-	vec.z = sqrt((1 - vec.x * vec.x - vec.y * vec.y));
-
-
-    return color;
+	// every ray returns no hit (numNoHits = numRays) -> colorValue is 1 -> bright
+	// every ray returns hit (numNoHits = 0) -> colorValue is 0 -> dark
+	float colorValue = float(numNoHits) / float(m_aoNumRays);
+    return Vec4f(colorValue);
 }
 
 Vec4f Renderer::computeShadingWhitted(RayTracer* rt, const RaycastResult& hit, const CameraControls& cameraCtrl, Random& rnd, int num_bounces)
