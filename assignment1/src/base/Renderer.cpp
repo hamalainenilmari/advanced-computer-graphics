@@ -206,10 +206,10 @@ Vec4f Renderer::computeShadingAmbientOcclusion(RayTracer* rt, const RaycastResul
     // YOUR CODE HERE (R4)
 	Vec3f n(hit.tri->normal()); // surface normal
 
-	Vec3f pos = cameraCtrl.getPosition() - hit.point;
+	Vec3f dirToHit = (cameraCtrl.getPosition() - hit.point).normalized(); // direction from camera to hit point
+
 	// camera is behind triangle, flip normal
-	
-	if (pos.dot(n) < 0) {
+	if (dirToHit.dot(n) < 0) {
 		n = n * -1;
 	}
 	

@@ -33,8 +33,7 @@ Vec2f getTexelCoords(Vec2f uv, const Vec2i size)
 
     float mappedX;
     float mappedY;
-    //std::cout << "before: x: " << uv.x << ", y: " << uv.y << std::endl;
-
+    // TODO check syntax
     if (uv.x < 0) {
         mappedX = -1.0f * uv.x - std::floor(-1.0f*uv.x);
     }
@@ -48,40 +47,25 @@ Vec2f getTexelCoords(Vec2f uv, const Vec2i size)
     else {
         mappedY = uv.y - std::floor(uv.y);
     }
-    //std::cout << "x: " << mappedX << ", y: " << mappedY << std::endl;
-
 	return Vec2f(mappedX * size.x, mappedY * size.y);
 }
 
+// generation of the rotation matrix R
 Mat3f formBasis(const Vec3f& n) {
     // YOUR CODE HERE (R4):
-    // generation of the rotation matrix R
     Mat3f R = Mat3f(.0f);
+    Vec3f Q;
+    // set the smallest abs element of Q/N to 1
+    float x = std::abs(n.x);
+    float y = std::abs(n.y);
+    float z = std::abs(n.z);
 
-    // construct a unit vector T that is perpendicular to N by 
-    // picking any vector Q that is not parallel to N,
-    // taking the cross product Q × N, and normalizing
-    Vec3f Q = n;
-    // set the smallest element of Q to 1
-    float x = std::abs(Q.x);
-    float y = std::abs(Q.y);
-    float z = std::abs(Q.z);
-    if (x < y && x < z) { Q.x = 1.0f; }
-    else if (y < x && y < z) { Q.y = 1.0f; }
-    else { Q.z = 1.0f; }
+    if (x < y && x < z) { Q = Vec3f(1.0, 0.0, 0.0); }
+    else if (y < z) { Q = Vec3f(0.0, 1.0, 0.0); }
+    else { Q = Vec3f(0.0, 0.0, 1.0); }
 
-    float roundLimit = 0.01;
-    if (std::abs(Q.x - n.x) < roundLimit && std::abs(Q.y - n.y) < roundLimit && std::abs(Q.z - n.z) < roundLimit) { // in case of n being (1, 1, 1) and Q still equals n
-        if (x == std::abs(n.x)) {
-            Q = Vec3f(0, 1, 0);
-        }
-        else {
-            Q = Vec3f(1, 0, 0);
-        }
-    }
-
+    // perpendicular to each other
     Vec3f T = cross(Q, n).normalized();
-
     Vec3f B = cross(n, T).normalized();
 
     R.m00 = T.x;
