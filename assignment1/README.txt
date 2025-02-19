@@ -3,19 +3,19 @@
 #
 # Assignment 1: Accelerated Ray Tracing
 
-Student name:
-Student number:
+Student name: Ilmari Hämäläinen
+Student number: 894931
 
 # Which parts of the assignment did you complete? Mark them 'done'.
 # You can also mark non-completed parts as 'attempted' if you spent a fair amount of
 # effort on them. If you do, explain the work you did in the problems/bugs section
 # and leave your 'attempt' code in place (commented out if necessary) so we can see it.
 
-R1 BVH construction and traversal (5p): not done
-        R2 BVH saving and loading (1p): not done
-              R3 Simple texturing (1p): not done
-             R4 Ambient occlusion (2p): not done
-         R5 Simple multithreading (1p): not done
+R1 BVH construction and traversal (5p): done
+        R2 BVH saving and loading (1p): done
+              R3 Simple texturing (1p): done
+             R4 Ambient occlusion (2p): done
+         R5 Simple multithreading (1p): done
 
 # Did you do any extra credit work?
 
