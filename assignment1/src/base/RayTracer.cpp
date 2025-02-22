@@ -33,9 +33,8 @@ Vec2f getTexelCoords(Vec2f uv, const Vec2i size)
 
     float mappedX;
     float mappedY;
-    // TODO check syntax
     if (uv.x < 0) {
-        mappedX = -1.0f * uv.x - std::floor(-1.0f*uv.x);
+        mappedX = -1.0f * uv.x - std::floor(-1.0f*uv.x); // e.g. uv.x = -4.5, mapped will be 0.5
     }
     else {
         mappedX = uv.x - std::floor(uv.x);
@@ -128,15 +127,19 @@ void RayTracer::saveHierarchy(const char* filename, const std::vector<RTTriangle
 // create the axis-aligned bounding box for the group of objects
 AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end) {
 
+    /*
     if (start >= end || start >= indiceList.size() || end > indiceList.size() || indiceList.empty()) {
+        std::cout << "here" << std::endl;
         return AABB(Vec3f(0, 0, 0), Vec3f(0, 0, 0));
     }
 
-    // initalize min point and max point of bb by first triangle
     if (indiceList[start] >= triangles.size()) {
+        std::cout << "here2" << std::endl;
         return AABB(Vec3f(0, 0, 0), Vec3f(0, 0, 0));
     }
-    
+    */
+
+    // initalize min point and max point of bb by first triangle
     Vec3f min = triangles[indiceList[start]].min();
     Vec3f max = triangles[indiceList[start]].max();
 
@@ -158,11 +161,14 @@ AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indice
 void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb) {
     // AABB of centroids to create actual split
 
-    // initalize min point and max point of bb by first triangle centroid
+    /*
     if (start >= end || start >= indiceList.size() || end > indiceList.size() || indiceList.empty()) {
-        // Return an empty AABB or throw an exception
+        std::cout << "here" << std::endl;
         return;
     }
+    */
+
+    // initalize min point and max point of bb by first triangle centroid
     Vec3f centroidMin = triangles[indiceList[start]].centroid();
     Vec3f centroidMax = centroidMin;
 
@@ -201,11 +207,11 @@ void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vec
                 leftSide++; // triangle belongs in the left side partition, increase left side size
         }
         else {
-            std::swap(indiceList[leftSide], indiceList[rightSide]); //  triangle belons to the right, swap with one from the right side
+            std::swap(indiceList[leftSide], indiceList[rightSide]); //  triangle belongs to the right, swap with one from the right side
             rightSide--; // reduce right side partition size 
         }
     }
-    // leftSide contains the index of first element in right side partition, midpoint
+    // leftSide contains the index of first element in right side partition = midpoint
     mid = leftSide;
 
     // in case of infinite loop by bad split
@@ -220,13 +226,11 @@ void RayTracer:: constructBvh(std::vector<RTTriangle>& triangles, std::vector<ui
     node.left = nullptr;
     node.right = nullptr;
     uint32_t triCount = end - start;
-    if (triCount > 3) { // TODO check the minimum size later
-
-        // Instead of sorting the triangle list when building your hierarchy,
-        // you should sort the index list, through which your Bvh traversal code should access the triangles.
+    if (triCount > 6) { // TODO check the minimum size later
 
         uint32_t mid;
-        partitionPrimitives(triangles, indiceList, start,end, mid, node.bb);
+        // in this case only split by spacial median
+        partitionPrimitives(triangles, indiceList, start, end, mid, node.bb);
 
         node.left = std::make_unique<BvhNode>();
         node.right = std::make_unique<BvhNode>();
@@ -244,15 +248,16 @@ void RayTracer:: constructBvh(std::vector<RTTriangle>& triangles, std::vector<ui
 void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode) {
     // YOUR CODE HERE (R1):
     // This is where you should construct your BVH.
-    // check if bvh has been initalized in raytracer
-    
+
+    // check if bvh has been initalized in this scene
     if (!m_bvhInitalized) {
         // if not, create initial bvh
         m_triangles = &triangles;
         uint32_t start = 0;
-        uint32_t end = m_triangles->size(); // index of "last" triangle in the scene TODO -1 ???
+        uint32_t end = m_triangles->size(); // index of "last" triangle in the scene
         m_bvh = Bvh(splitMode, start, end);
         m_bvhInitalized = true;
+        m_triangleCount = m_triangles->size() / 30000;
 
         // then call the actual recursive builder with the root node
         constructBvh(triangles, m_bvh.getIndices(), m_bvh.root(), start, end);
@@ -260,26 +265,66 @@ void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode
 }
 
 // traverse through the BVH and recursively check for intersections 
-RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, BvhNode& node) {
+RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const BvhNode& node) {
     RaycastResult castresult;
 
     // first check if ray intersects bb
-    if (!rayBBIntersect(orig, dir, node)) {
+    /*
+    float tStart;
+    if (!rayBBIntersect(orig, dir, node, tStart)) {
         return castresult;
     }
+    */
 
+    // intersects bb, check if bb has child bbs
     if (node.hasChildren()) {   
-        // intersect the bb, traverse children
-        RaycastResult resultLeft = traverseBvh(orig, dir, *node.left);
-        RaycastResult resultRight = traverseBvh(orig, dir, *node.right);
+        // traverse children
 
-        if (resultLeft.tri == nullptr && resultRight.tri == nullptr) {
+        RaycastResult resultLeft, resultRight;
+        
+        float tStartLeft;
+        float tStartRight;
+        bool intersectLeft = rayBBIntersect(orig, dir, *node.left, tStartLeft);
+        bool intersectRight = rayBBIntersect(orig, dir, *node.right, tStartRight);
+
+        if (intersectLeft && intersectRight) {  // both child node bbs hit
+            if (tStartLeft < tStartRight) { // left closer, traverse it first
+                resultLeft = traverseBvh(orig, dir, *node.left);
+                if ((resultLeft.tri != nullptr) && (resultLeft.t < tStartRight)) { // if left child hit triangle is closer than right child bb -> skip right child, return result
+                    return resultLeft;
+                }
+                resultRight = traverseBvh(orig, dir, *node.right);
+            }
+            else { // traverse right
+                resultRight = traverseBvh(orig, dir, *node.right);
+                if (resultRight.tri != nullptr && resultRight.t < tStartLeft) {
+                    return resultRight;
+                }
+                resultLeft = traverseBvh(orig, dir, *node.left);
+            }
+        }
+        else if (intersectLeft) {
+            resultLeft = traverseBvh(orig, dir, *node.left);
+        }
+        else if (intersectRight) {
+            resultRight = traverseBvh(orig, dir, *node.right);
+        }
+        else {
             return castresult;
         }
-        if (resultLeft.tri == nullptr) return resultRight;
-        if (resultRight.tri == nullptr) return resultLeft;
+        
+        //RaycastResult resultLeft = traverseBvh(orig, dir, *node.left);
+        //RaycastResult resultRight = traverseBvh(orig, dir, *node.right);
+        
+        if ((resultLeft.tri == nullptr) && (resultRight.tri == nullptr)) { // no hit
+            return castresult;
+        }
+        
+        
+        if (resultLeft.tri == nullptr) return resultRight; // hit from only right, return it
+        if (resultRight.tri == nullptr) return resultLeft; // only left
 
-        // return closer
+        // both hit, return closer
         return (resultLeft.t < resultRight.t) ? resultLeft : resultRight;
     }
     else {
@@ -290,7 +335,7 @@ RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, BvhNod
 
         // loop through the triangles in the child node
         const std::vector<uint32_t>& indices = m_bvh.getIndices();
-        for (uint32_t i = node.startPrim; i < node.endPrim; ++i) { // TODO check if faster to call start, end once in the beginning
+        for (uint32_t i = node.startPrim; i < node.endPrim; ++i) {
             float t, u, v;
             const RTTriangle& tri = (*m_triangles)[indices[i]];
             if (tri.intersect_woop(orig, dir, t, u, v))
@@ -312,7 +357,7 @@ RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, BvhNod
 }
 
 // check if there is intersection between ray and bounding box
-bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& node) {
+bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& node, float& t_start) {
     
     // bounding box points
     Vec3f minP = node.bb.min;
@@ -331,23 +376,25 @@ bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& nod
         if (orig.z < minP.z || orig.z > maxP.z) {return false;}
     }
 
+    Vec3f precompute = Vec3f(1.0 / dir.x, 1.0 / dir.y, 1.0 / dir.z);
+
     // x interval
-    float t1_x = (minP.x - orig.x) / dir.x; // t min x
-    float t2_x = (maxP.x - orig.x) / dir.x;
+    float t1_x = (minP.x - orig.x) * precompute.x; // t min x
+    float t2_x = (maxP.x - orig.x) * precompute.x;
     if (t1_x > t2_x) std::swap(t1_x, t2_x);
     
     // y interval
-    float t1_y = (minP.y - orig.y) / dir.y;
-    float t2_y = (maxP.y - orig.y) / dir.y;
+    float t1_y = (minP.y - orig.y) * precompute.y;
+    float t2_y = (maxP.y - orig.y) * precompute.y;
     if (t1_y > t2_y) std::swap(t1_y, t2_y);
 
     // z interval
-    float t1_z = (minP.z - orig.z) / dir.z;
-    float t2_z = (maxP.z - orig.z) / dir.z;
+    float t1_z = (minP.z - orig.z) * precompute.z;
+    float t2_z = (maxP.z - orig.z) * precompute.z;
     if (t1_z > t2_z) std::swap(t1_z, t2_z);
 
     // final intersect interval: max of starts, min of ends
-    float t_start = std::max(std::max(t1_x, t1_y), t1_z);
+    t_start = std::max(std::max(t1_x, t1_y), t1_z);
     float t_end = std::min(std::min(t2_x, t2_y), t2_z);
     
     // TODO check if we are behind box
@@ -372,7 +419,12 @@ RaycastResult RayTracer::raycast(const Vec3f& orig, const Vec3f& dir) /*const*/ 
     // reciprocal of the ray direction.
 
     RaycastResult castresult;
-    castresult =  traverseBvh(orig, dir, m_bvh.root());
+    
+    float tStart;
+    if (rayBBIntersect(orig, dir, m_bvh.root(), tStart)) { // TODO check if ncessary to check root node itnersect
+        castresult = traverseBvh(orig, dir, m_bvh.root()); 
+    }
+    //castresult =  traverseBvh(orig, dir, m_bvh.root());
 
     return castresult;
 }
