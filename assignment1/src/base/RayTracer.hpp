@@ -33,7 +33,7 @@ public:
     void				saveHierarchy			(const char* filename, const std::vector<RTTriangle>& triangles);
     void				loadHierarchy			(const char* filename, std::vector<RTTriangle>& triangles);
 
-    RaycastResult		raycast					(const Vec3f& orig, const Vec3f& dir) /*const*/ ;     // TODO check the const!
+    RaycastResult		raycast					(const Vec3f& orig, const Vec3f& dir);
 
     void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb);
     void RayTracer::constructBvh(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, BvhNode& node, uint32_t start, uint32_t end);
@@ -45,18 +45,13 @@ public:
     static FW::String	computeMD5				(const std::vector<Vec3f>& vertices);
 
     std::vector<RTTriangle>* m_triangles;
-    int m_triangleCount;
-    //void setTriangleCount(int count) { m_triangleCount = count; }
 
 	void resetRayCounter() { m_rayCount = 0; }
 	int getRayCount() { return m_rayCount; }
-    bool hasBeenInitalized() { return m_bvhInitalized; }
-    void initalizeBvh() { m_bvhInitalized = true; }
 
 private:
 	mutable std::atomic<int> m_rayCount;
 	Bvh m_bvh;
-    bool m_bvhInitalized = false;
 };
 
 

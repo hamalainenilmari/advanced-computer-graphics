@@ -154,7 +154,6 @@ void Renderer::getTextureParameters(const RaycastResult& hit, Vec3f& diffuse, Ve
 	Vec2f t1 = hit.tri->m_vertices[0].t;
 	Vec2f t2 = hit.tri->m_vertices[1].t;
 	Vec2f t3 = hit.tri->m_vertices[2].t;
-	//Vec2f uv = Vec2f(.0f);
 	Vec2f uv = (1.0f - hit.u - hit.v)*t1 + hit.u * t2 + hit.v * t3; //barycentric interpolation
 
 	Texture& diffuseTex = mat->textures[MeshBase::TextureType_Diffuse]; //note: you can fetch other kinds of textures like this too. 
@@ -236,7 +235,7 @@ Vec4f Renderer::computeShadingAmbientOcclusion(RayTracer* rt, const RaycastResul
 		Vec3f rotatedDir = rotationMat * randDir;
 
 		// nudge hit point slightly closer to camera to avoid rounding errors
-		RaycastResult hitAO = rt->raycast(hit.point + ((cameraCtrl.getPosition() - hit.point) * 0.001), rotatedDir * m_aoRayLength);
+		RaycastResult hitAO = rt->raycast(hit.point + (dirToHit * 0.001), rotatedDir * m_aoRayLength);
 
 		if (hitAO.tri == nullptr ) // no hit
 		{

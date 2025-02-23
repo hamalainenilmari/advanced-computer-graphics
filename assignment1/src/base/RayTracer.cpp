@@ -127,7 +127,7 @@ void RayTracer::saveHierarchy(const char* filename, const std::vector<RTTriangle
 // create the axis-aligned bounding box for the group of objects
 AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end) {
 
-    /*
+    
     if (start >= end || start >= indiceList.size() || end > indiceList.size() || indiceList.empty()) {
         std::cout << "here" << std::endl;
         return AABB(Vec3f(0, 0, 0), Vec3f(0, 0, 0));
@@ -137,7 +137,7 @@ AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indice
         std::cout << "here2" << std::endl;
         return AABB(Vec3f(0, 0, 0), Vec3f(0, 0, 0));
     }
-    */
+    
 
     // initalize min point and max point of bb by first triangle
     Vec3f min = triangles[indiceList[start]].min();
@@ -160,14 +160,7 @@ AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indice
 
 void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb) {
     // AABB of centroids to create actual split
-
-    /*
-    if (start >= end || start >= indiceList.size() || end > indiceList.size() || indiceList.empty()) {
-        std::cout << "here" << std::endl;
-        return;
-    }
-    */
-
+   
     // initalize min point and max point of bb by first triangle centroid
     Vec3f centroidMin = triangles[indiceList[start]].centroid();
     Vec3f centroidMax = centroidMin;
@@ -250,111 +243,16 @@ void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode
     // This is where you should construct your BVH.
 
     // check if bvh has been initalized in this scene
-    if (!m_bvhInitalized) {
-        // if not, create initial bvh
-        m_triangles = &triangles;
-        uint32_t start = 0;
-        uint32_t end = m_triangles->size(); // index of "last" triangle in the scene
-        m_bvh = Bvh(splitMode, start, end);
-        m_bvhInitalized = true;
-        m_triangleCount = m_triangles->size() / 30000;
+    m_triangles = &triangles;
+    uint32_t start = 0;
+    uint32_t end = m_triangles->size(); // index of "last" triangle in the scene
+    m_bvh = Bvh(splitMode, start, end);
 
-        // then call the actual recursive builder with the root node
-        constructBvh(triangles, m_bvh.getIndices(), m_bvh.root(), start, end);
-    }
+    // then call the actual recursive builder with the root node
+    constructBvh(triangles, m_bvh.getIndices(), m_bvh.root(), start, end);
 }
 
-// traverse through the BVH and recursively check for intersections 
-RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const BvhNode& node) {
-    RaycastResult castresult;
 
-    // first check if ray intersects bb
-    /*
-    float tStart;
-    if (!rayBBIntersect(orig, dir, node, tStart)) {
-        return castresult;
-    }
-    */
-
-    // intersects bb, check if bb has child bbs
-    if (node.hasChildren()) {   
-        // traverse children
-
-        RaycastResult resultLeft, resultRight;
-        
-        float tStartLeft;
-        float tStartRight;
-        bool intersectLeft = rayBBIntersect(orig, dir, *node.left, tStartLeft);
-        bool intersectRight = rayBBIntersect(orig, dir, *node.right, tStartRight);
-
-        if (intersectLeft && intersectRight) {  // both child node bbs hit
-            if (tStartLeft < tStartRight) { // left closer, traverse it first
-                resultLeft = traverseBvh(orig, dir, *node.left);
-                if ((resultLeft.tri != nullptr) && (resultLeft.t < tStartRight)) { // if left child hit triangle is closer than right child bb -> skip right child, return result
-                    return resultLeft;
-                }
-                resultRight = traverseBvh(orig, dir, *node.right);
-            }
-            else { // traverse right
-                resultRight = traverseBvh(orig, dir, *node.right);
-                if (resultRight.tri != nullptr && resultRight.t < tStartLeft) {
-                    return resultRight;
-                }
-                resultLeft = traverseBvh(orig, dir, *node.left);
-            }
-        }
-        else if (intersectLeft) {
-            resultLeft = traverseBvh(orig, dir, *node.left);
-        }
-        else if (intersectRight) {
-            resultRight = traverseBvh(orig, dir, *node.right);
-        }
-        else {
-            return castresult;
-        }
-        
-        //RaycastResult resultLeft = traverseBvh(orig, dir, *node.left);
-        //RaycastResult resultRight = traverseBvh(orig, dir, *node.right);
-        
-        if ((resultLeft.tri == nullptr) && (resultRight.tri == nullptr)) { // no hit
-            return castresult;
-        }
-        
-        
-        if (resultLeft.tri == nullptr) return resultRight; // hit from only right, return it
-        if (resultRight.tri == nullptr) return resultLeft; // only left
-
-        // both hit, return closer
-        return (resultLeft.t < resultRight.t) ? resultLeft : resultRight;
-    }
-    else {
-        // leaf node, check intersection between triangles in this node
-        float closest_t = 1.0f, closest_u = 0.0f, closest_v = 0.0f;
-        int closest_i = -1;
-        uint32_t i = 0;
-
-        // loop through the triangles in the child node
-        const std::vector<uint32_t>& indices = m_bvh.getIndices();
-        for (uint32_t i = node.startPrim; i < node.endPrim; ++i) {
-            float t, u, v;
-            const RTTriangle& tri = (*m_triangles)[indices[i]];
-            if (tri.intersect_woop(orig, dir, t, u, v))
-            {
-                if (t > 0.0f && t < closest_t)
-                {
-                    closest_i = indices[i];
-                    closest_t = t;
-                    closest_u = u;
-                    closest_v = v;
-                }
-            }
-        }
-        if (closest_i != -1) {
-            castresult = RaycastResult(&(*m_triangles)[closest_i], closest_t, closest_u, closest_v, orig + closest_t * dir, orig, dir);
-        }
-        return castresult;
-    }
-}
 
 // check if there is intersection between ray and bounding box
 bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& node, float& t_start) {
@@ -397,8 +295,6 @@ bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& nod
     t_start = std::max(std::max(t1_x, t1_y), t1_z);
     float t_end = std::min(std::min(t2_x, t2_y), t2_z);
     
-    // TODO check if we are behind box
-
     // box is missed?
     if (t_start > t_end) {
         return false;
@@ -407,7 +303,85 @@ bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& nod
     return true;
 }
 
-RaycastResult RayTracer::raycast(const Vec3f& orig, const Vec3f& dir) /*const*/ {  // TODO check the const!
+// traverse through the BVH and recursively check for intersections 
+RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const BvhNode& node) {
+    RaycastResult castresult;
+
+    // check if bb has child bbs
+    if (node.hasChildren()) {
+        RaycastResult resultLeft, resultRight;
+        float tStartLeft, tStartRight;
+
+        // check children bb ray intersect, return intersect starting points
+        bool intersectLeft = rayBBIntersect(orig, dir, *node.left, tStartLeft);
+        bool intersectRight = rayBBIntersect(orig, dir, *node.right, tStartRight);
+
+        if (intersectLeft && intersectRight) {  // both child node bbs hit
+            if (tStartLeft < tStartRight) { // left closer, traverse it first
+                resultLeft = traverseBvh(orig, dir, *node.left);
+                if (resultLeft.tri != nullptr && resultLeft.t < tStartRight) { // if left child hit triangle is closer than right child bb -> skip right child, return result
+                    return resultLeft;
+                }
+                resultRight = traverseBvh(orig, dir, *node.right);
+            }
+            else { // traverse right
+                resultRight = traverseBvh(orig, dir, *node.right);
+                if (resultRight.tri != nullptr && resultRight.t < tStartLeft) {
+                    return resultRight;
+                }
+                resultLeft = traverseBvh(orig, dir, *node.left);
+            }
+        }
+        else if (intersectLeft) { // intersect only left child
+            resultLeft = traverseBvh(orig, dir, *node.left);
+        }
+        else if (intersectRight) {
+            resultRight = traverseBvh(orig, dir, *node.right);
+        }
+        else { // no intersect for children
+            return castresult;
+        }
+
+        if ((resultLeft.tri == nullptr) && (resultRight.tri == nullptr)) { // no hit
+            return castresult;
+        }
+
+        if (resultLeft.tri == nullptr) return resultRight; // hit from only right, return it
+        if (resultRight.tri == nullptr) return resultLeft; // only left
+
+        // both hit, return closer
+        return (resultLeft.t < resultRight.t) ? resultLeft : resultRight;
+    }
+    else {
+        // leaf node, check intersection between triangles in this node
+        float closest_t = 1.0f, closest_u = 0.0f, closest_v = 0.0f;
+        int closest_i = -1;
+        uint32_t i = 0;
+
+        // loop through the triangles in the node
+        const std::vector<uint32_t>& indices = m_bvh.getIndices();
+        for (uint32_t i = node.startPrim; i < node.endPrim; ++i) {
+            float t, u, v;
+            const RTTriangle& tri = (*m_triangles)[indices[i]];
+            if (tri.intersect_woop(orig, dir, t, u, v))
+            {
+                if (t > 0.0f && t < closest_t)
+                {
+                    closest_i = indices[i];
+                    closest_t = t;
+                    closest_u = u;
+                    closest_v = v;
+                }
+            }
+        }
+        if (closest_i != -1) {
+            castresult = RaycastResult(&(*m_triangles)[closest_i], closest_t, closest_u, closest_v, orig + closest_t * dir, orig, dir);
+        }
+        return castresult;
+    }
+}
+
+RaycastResult RayTracer::raycast(const Vec3f& orig, const Vec3f& dir) {
 	++m_rayCount;
 
     // YOUR CODE HERE (R1):
@@ -418,47 +392,10 @@ RaycastResult RayTracer::raycast(const Vec3f& orig, const Vec3f& dir) /*const*/ 
     // function to do one-off things per ray like finding the elementwise
     // reciprocal of the ray direction.
 
+    // traverse bvh starting from root node
     RaycastResult castresult;
+    castresult = traverseBvh(orig, dir, m_bvh.root()); 
     
-    float tStart;
-    if (rayBBIntersect(orig, dir, m_bvh.root(), tStart)) { // TODO check if ncessary to check root node itnersect
-        castresult = traverseBvh(orig, dir, m_bvh.root()); 
-    }
-    //castresult =  traverseBvh(orig, dir, m_bvh.root());
-
     return castresult;
 }
 } // namespace FW
-
-    // You can use this existing code for leaf nodes of the BVH (you do want to
-    // change the range of the loop to match the elements the leaf covers.)
-
-    /*
-    float closest_t = 1.0f, closest_u = 0.0f, closest_v = 0.0f;
-    int closest_i = -1;
-
-
-
-    RaycastResult castresult;
-
-    // Naive loop over all triangles; this will give you the correct results,
-    // but is terribly slow when ran for all triangles for each ray. Try it.
-    for ( int i = 0; i < m_triangles->size(); ++i )
-    {
-        float t, u, v;
-        if ( (*m_triangles)[i].intersect_woop( orig, dir, t, u, v ) )
-        {
-            if ( t > 0.0f && t < closest_t)
-            {
-                closest_i = i;
-                closest_t = t;
-                closest_u = u;
-                closest_v = v;
-            }
-        }
-    }
-
-    if (closest_i != -1)
-        castresult = RaycastResult(&(*m_triangles)[closest_i], closest_t, closest_u, closest_v, orig + closest_t *dir, orig, dir);
-
-    */
