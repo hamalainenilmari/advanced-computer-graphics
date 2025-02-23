@@ -126,19 +126,6 @@ void RayTracer::saveHierarchy(const char* filename, const std::vector<RTTriangle
 
 // create the axis-aligned bounding box for the group of objects
 AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end) {
-
-    
-    if (start >= end || start >= indiceList.size() || end > indiceList.size() || indiceList.empty()) {
-        std::cout << "here" << std::endl;
-        return AABB(Vec3f(0, 0, 0), Vec3f(0, 0, 0));
-    }
-
-    if (indiceList[start] >= triangles.size()) {
-        std::cout << "here2" << std::endl;
-        return AABB(Vec3f(0, 0, 0), Vec3f(0, 0, 0));
-    }
-    
-
     // initalize min point and max point of bb by first triangle
     Vec3f min = triangles[indiceList[start]].min();
     Vec3f max = triangles[indiceList[start]].max();
@@ -219,7 +206,7 @@ void RayTracer:: constructBvh(std::vector<RTTriangle>& triangles, std::vector<ui
     node.left = nullptr;
     node.right = nullptr;
     uint32_t triCount = end - start;
-    if (triCount > 6) { // TODO check the minimum size later
+    if (triCount > 6) { // this leaf node triangle size proved to be ok
 
         uint32_t mid;
         // in this case only split by spacial median
