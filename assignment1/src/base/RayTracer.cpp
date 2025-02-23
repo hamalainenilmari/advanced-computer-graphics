@@ -200,28 +200,146 @@ void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vec
     }
 }
 
+// Surface Area Heurestic
+void partitionSAH(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb) {
+
+    float tTri = 1.0f;
+    float tNode = 1.0f;
+    
+
+    // pick planes at uniform intervals from the extent of the parent AABB along all three axis
+    // this will give 3 different splits
+    Vec3f midPlane1 = (bb.min + bb.max) * 0.10f;
+    Vec3f midPlane2 = (bb.min + bb.max) * 0.20f;
+    Vec3f midPlane3 = (bb.min + bb.max) * 0.30f;
+    Vec3f midPlane4 = (bb.min + bb.max) * 0.40f;
+    Vec3f midPlane5 = (bb.min + bb.max) * 0.50f;
+    Vec3f midPlane6 = (bb.min + bb.max) * 0.60f;
+    Vec3f midPlane7 = (bb.min + bb.max) * 0.70f;
+    Vec3f midPlane8 = (bb.min + bb.max) * 0.80f;
+    Vec3f midPlane9 = (bb.min + bb.max) * 0.90f;
+
+    // array of each split
+    std::vector<Vec3f> splitPlanes = { midPlane1, midPlane2, midPlane3, midPlane4, midPlane5, midPlane6, midPlane7, midPlane8, midPlane9 };
+
+
+    // initialize the sah
+    float minimalSah = std::numeric_limits<float>::max();
+    uint32_t sahMid = start;
+
+    for (int axis = 0; axis < 3; ++axis) { // each axis like in spacial median
+        for (const Vec3f& splitPlane : splitPlanes) { // each plane
+            auto leftSide = start;
+            auto rightSide = end - 1;
+
+            // partition the primitives to the new splits
+            while (leftSide < rightSide) {
+                const Vec3f& centroid = triangles[indiceList[leftSide]].centroid();
+                if ((axis == 0 && centroid.x < splitPlane.x) ||
+                    (axis == 1 && centroid.y < splitPlane.y) ||
+                    (axis == 2 && centroid.z < splitPlane.z)
+                    ) {
+                        leftSide++; // triangle belongs in the left side partition, increase left side size
+                }
+                else {
+                        std::swap(indiceList[leftSide], indiceList[rightSide]);
+                        rightSide--;
+
+                }
+            }
+
+            // leftSide contains the index of first element in right side partition = midpoint
+            uint32_t currentPartitionMid = leftSide;
+            
+
+            // in case of infinite loop by bad split
+            if (currentPartitionMid == start || currentPartitionMid == end) {
+                continue; // currentPartitionMid = start + (end - start) / 2;
+            }
+            
+            AABB leftBB = bb;
+            AABB rightBB = bb;
+
+            // create child bbs from parent divided by plane
+            if (axis == 0) {
+                leftBB.max.x = splitPlane.x;
+                rightBB.min.x = splitPlane.x;
+            }
+            else if (axis == 1) {
+                leftBB.max.y = splitPlane.y;
+                rightBB.min.y = splitPlane.y;
+            }
+            else {
+                leftBB.max.z = splitPlane.z;
+                rightBB.min.z = splitPlane.z;
+            }
+
+            // Compute the heuristic for each plane: SAH(i) = AL*NL + AR*NR,
+            int numNodesRight = (end - currentPartitionMid);
+            int numNodesLeft = (currentPartitionMid - start);
+            float currentSah = leftBB.area() * numNodesLeft + rightBB.area() * numNodesRight;
+            //std::cout << "sah: " << currentSah << std::endl;
+            // keep the lowest sah
+            if (currentSah < minimalSah) {
+                minimalSah = currentSah;
+                sahMid = currentPartitionMid;
+            }
+        }
+    }
+    std::cout << "left: " << start << std::endl;
+    std::cout << "right: " << end << std::endl;
+    std::cout << "returning: " << sahMid<< std::endl;
+
+    mid = sahMid;
+}
 
 void RayTracer:: constructBvh(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, BvhNode& node, uint32_t start, uint32_t end) {
     node.bb = computeBB(triangles, indiceList, start, end); // bounding box of the node
     node.left = nullptr;
     node.right = nullptr;
     uint32_t triCount = end - start;
-    if (triCount > 6) { // this leaf node triangle size proved to be ok
+    
+    switch (m_bvh.splitMode()) {
+        case SplitMode_SpatialMedian:
+            if (triCount > 6) { // this leaf node triangle size proved to be ok
 
-        uint32_t mid;
-        // in this case only split by spacial median
-        partitionPrimitives(triangles, indiceList, start, end, mid, node.bb);
+                uint32_t mid;
+                // in this case only split by spacial median
+                partitionPrimitives(triangles, indiceList, start, end, mid, node.bb);
 
-        node.left = std::make_unique<BvhNode>();
-        node.right = std::make_unique<BvhNode>();
+                node.left = std::make_unique<BvhNode>();
+                node.right = std::make_unique<BvhNode>();
 
-        constructBvh(triangles, indiceList, *node.left, start, mid);
-        constructBvh(triangles, indiceList, *node.right, mid, end);
-    }
-    else {
-        node.startPrim = start;
-        node.endPrim = end;
-    }
+                constructBvh(triangles, indiceList, *node.left, start, mid);
+                constructBvh(triangles, indiceList, *node.right, mid, end);
+            }
+            else {
+                node.startPrim = start;
+                node.endPrim = end;
+            }
+            break;
+        case SplitMode_Sah:
+        
+            if (triCount > 30) { 
+
+                uint32_t mid;
+                
+                // SAH partition
+                partitionSAH(triangles, indiceList, start, end, mid, node.bb);
+                //std::cout << "new mid: " << mid << std::endl;
+                node.left = std::make_unique<BvhNode>();
+                node.right = std::make_unique<BvhNode>();
+
+                constructBvh(triangles, indiceList, *node.left, start, mid);
+                constructBvh(triangles, indiceList, *node.right, mid, end);
+            }
+            else {
+                node.startPrim = start;
+                node.endPrim = end;
+            }
+            break;
+      }
+    
 }
 
 
@@ -233,7 +351,8 @@ void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode
     m_triangles = &triangles;
     uint32_t start = 0;
     uint32_t end = m_triangles->size(); // index of "last" triangle in the scene
-    m_bvh = Bvh(splitMode, start, end);
+    //m_bvh = Bvh(splitMode, start, end);
+    m_bvh = Bvh(SplitMode_Sah, start, end);
 
     // then call the actual recursive builder with the root node
     constructBvh(triangles, m_bvh.getIndices(), m_bvh.root(), start, end);
@@ -284,6 +403,10 @@ bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& nod
     
     // box is missed?
     if (t_start > t_end) {
+        return false;
+    }
+    // box is behind?
+    if (t_end < 0) {
         return false;
     }
 
@@ -343,7 +466,6 @@ RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const 
         // leaf node, check intersection between triangles in this node
         float closest_t = 1.0f, closest_u = 0.0f, closest_v = 0.0f;
         int closest_i = -1;
-        uint32_t i = 0;
 
         // loop through the triangles in the node
         const std::vector<uint32_t>& indices = m_bvh.getIndices();
