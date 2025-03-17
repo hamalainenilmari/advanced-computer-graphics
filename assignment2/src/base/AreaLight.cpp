@@ -40,8 +40,30 @@ void AreaLight::sample(float& pdf, Vec3f& p, int base, Random& rnd) {
     // the outside. If you only implement purely random sampling, "base" is not required.
 
     // (this does not do what it's supposed to!)
-    pdf = 1.0f;
-    p = Vec4f(m_xform.getCol(3)).getXYZ();
+
+    // pdf = 1.0f;
+    // p = Vec4f(m_xform.getCol(3)).getXYZ();
+
+    // PDF = probability density function
+    // light source samples are drawn using from the PDF p(y).
+
+    // draw a random point on the light source, store result in p
+    // evaluate PDF, store result in pdf
+
+    float localX = rnd.getF32(-1.0f, 1.0f);
+    float localY = rnd.getF32(-1.0f, 1.0f);
+
+
+    float scaledX = localX * m_size.x;
+    float scaledY = localY * m_size.y;
+
+
+    Vec4f localPoint(scaledX, scaledY, 0.0f, 1.0f);
+    Vec4f worldPoint = m_xform * localPoint;
+    p = worldPoint.getXYZ();
+
+
+    pdf = 1.0f / (4*m_size.x*m_size.y); // probability  
 }
 
 

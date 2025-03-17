@@ -49,11 +49,11 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
 
 
 	// This is the dummy implementation you should remove.
-    ctx.m_vecResult[ v ] = n*0.5+0.5;
-    Sleep(1);
-    return;
+    //ctx.m_vecResult[ v ] = n*0.5+0.5;
+    //Sleep(1);
+    //return;
 
-    /*
+    
     // direct lighting pass? => integrate direct illumination by shooting shadow rays to light source
     if ( ctx.m_currentBounce == 0 )
     {
@@ -64,12 +64,31 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
             float pdf;
             Vec3f Pl;
 
-            // construct vector from current vertex (o) to light sample
+            Random rnd;
+            ctx.m_light->sample(pdf, Pl, 10, rnd);
 
-            // trace shadow ray to see if it's blocked
-            {
+            // construct vector from current vertex (o) to light sample
+            Vec3f vectorToLight = Vec3f(Pl - o);
+
+            float dis = vectorToLight.length();
+
+            // shoot ray from current vertex to area light
+            RaycastResult res = ctx.m_rt->raycast(o, vectorToLight);
+
+            // check if ray has hit something before light
+            if (res.t >= dis - 0.001f) {
                 // if not, add the appropriate emission, 1/r^2 and clamped cosine terms, accounting for the PDF as well.
                 // accumulate into E
+               
+                Vec3f incomingLightDir = vectorToLight.normalized(); // unit vector of direction to light
+
+                float theta = std::max(0.0f, incomingLightDir.dot(n));                           // angle between the incoming direction w and the surface normal at x
+                float thetaLight = std::max(0.0f, -vectorToLight.dot(ctx.m_light->getNormal())); // angle between the vector yx and the surface normal of the light
+                Vec3f emission = ctx.m_light->getEmission();
+                float rr = (1 / (dis * dis));
+
+                Vec3f total = emission * rr * theta * thetaLight * (1/pdf);
+                E = E + total;
             }
         }
 
@@ -77,6 +96,8 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
         ctx.m_vecCurr[ v ] = E * (1.0f/ctx.m_numDirectRays);
         ctx.m_vecResult[ v ] = ctx.m_vecCurr[ v ];
     }
+
+    /*
     else
     {
         // OK, time for indirect!
@@ -139,6 +160,7 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
                 E += Ei;	// accumulate
             }
         }
+
         // Store result for this bounce
 
         ctx.m_vecCurr[ v ] = E * (1.0 / ctx.m_numHemisphereRays);
@@ -149,6 +171,7 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
         //ctx.m_vecResult[ v ] = ctx.m_vecCurr[ v ];	
     }
     */
+    
 }
 // --------------------------------------------------------------------------
 
@@ -181,8 +204,8 @@ void Radiosity::startRadiosityProcess( MeshWithColors* scene, AreaLight* light, 
 	m_context.m_vecSphericalZ.assign(scene->numVertices(), Vec3f(0, 0, 0));
 
     // fire away!
-    m_launcher.setNumThreads(m_launcher.getNumCores());	// the solution exe is multithreaded
-    //m_launcher.setNumThreads(1);							// but you have to make sure your code is thread safe before enabling this!
+    //m_launcher.setNumThreads(m_launcher.getNumCores());	// the solution exe is multithreaded
+    m_launcher.setNumThreads(1);							// but you have to make sure your code is thread safe before enabling this!
     m_launcher.popAll();
     m_launcher.push( vertexTaskFunc, &m_context, 0, scene->numVertices() );
 }
