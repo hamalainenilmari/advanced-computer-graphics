@@ -3,15 +3,15 @@
 #
 # Assignment 2: Radiosity
 
-Student name:
-Student number:
+Student name: Ilmari Hämäläinen
+Student number: 894931
 
 # Which parts of the assignment did you complete? Mark them 'done'.
 # You can also mark non-completed parts as 'attempted' if you spent a fair amount of
 # effort on them. If you do, explain the work you did in the problems/bugs section
 # and leave your 'attempt' code in place (commented out if necessary) so we can see it.
 
-R1 Integrate old raytracing code (1p): not done
+R1 Integrate old raytracing code (1p): done
             R2 Area light source (3p): not done
                     R3 Radiosity (6p): not done
 
