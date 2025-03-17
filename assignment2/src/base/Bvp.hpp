@@ -26,24 +26,25 @@ public:
         std::swap(indices_, other.indices_);
         return *this;
     }
-      
+
     SplitMode               splitMode() const { return mode_; }
 
-    BvhNode&			root() { return *rootNode_; }
-    const BvhNode&		root() const { return *rootNode_; }
+    BvhNode& root() { return *rootNode_; }
+    const BvhNode& root() const { return *rootNode_; }
 
-    void				save(std::ostream& os);
+    void				    save(std::ostream& os);
 
-	uint32_t			getIndex(uint32_t index) const { return indices_[index]; }
+    uint32_t			    getIndex(uint32_t index) const { return indices_[index]; }
     std::vector<uint32_t>& getIndices() { return indices_; }
+    void                    sortIndices(std::vector<uint32_t> list) { indices_ = list; }
 
 private:
 
 
     SplitMode						mode_;
     std::unique_ptr<BvhNode>		rootNode_;
-    
-	std::vector<uint32_t>			indices_; // triangle index list that will be sorted during BVH construction
+
+    std::vector<uint32_t>			indices_; // triangle index list that will be sorted during BVH construction
 };
 
 

@@ -181,8 +181,8 @@ void Radiosity::startRadiosityProcess( MeshWithColors* scene, AreaLight* light, 
 	m_context.m_vecSphericalZ.assign(scene->numVertices(), Vec3f(0, 0, 0));
 
     // fire away!
-    //m_launcher.setNumThreads(m_launcher.getNumCores());	// the solution exe is multithreaded
-    m_launcher.setNumThreads(1);							// but you have to make sure your code is thread safe before enabling this!
+    m_launcher.setNumThreads(m_launcher.getNumCores());	// the solution exe is multithreaded
+    //m_launcher.setNumThreads(1);							// but you have to make sure your code is thread safe before enabling this!
     m_launcher.popAll();
     m_launcher.push( vertexTaskFunc, &m_context, 0, scene->numVertices() );
 }

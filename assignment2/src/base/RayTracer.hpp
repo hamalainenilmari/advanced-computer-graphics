@@ -28,13 +28,18 @@ public:
                         RayTracer				(void);
                         ~RayTracer				(void);
 
-						void					constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode);
+	void				constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode splitMode);
 
     void				saveHierarchy			(const char* filename, const std::vector<RTTriangle>& triangles);
     void				loadHierarchy			(const char* filename, std::vector<RTTriangle>& triangles);
 
-    RaycastResult		raycast					(const Vec3f& orig, const Vec3f& dir) const;
+    RaycastResult		raycast					(const Vec3f& orig, const Vec3f& dir);
 
+    void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb);
+    void RayTracer::constructBvh(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, BvhNode& node, uint32_t start, uint32_t end);
+    RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const BvhNode& node);
+    bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& node, float& t_start);
+    
     // This function computes an MD5 checksum of the input scene data,
     // WITH the assumption that all vertices are allocated in one big chunk.
     static FW::String	computeMD5				(const std::vector<Vec3f>& vertices);
@@ -49,9 +54,9 @@ private:
     // YOUR CODE HERE (R1):
     // This is the library implementation of the ray tracer.
     // Remove this once you have integrated your own ray tracer.
-    std::unique_ptr<rtlib::RayTracer> m_rt;
+    //std::unique_ptr<rtlib::RayTracer> m_rt;
     
-    // Bvh m_bvh; // Replace the above with your own Bvh and whatever other member variables you have
+    Bvh m_bvh; // Replace the above with your own Bvh and whatever other member variables you have
 };
 
 

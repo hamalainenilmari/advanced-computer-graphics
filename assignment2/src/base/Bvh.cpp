@@ -11,6 +11,14 @@ namespace FW {
 Bvh::Bvh() { }
 
 
+Bvh::Bvh(SplitMode splitmode, uint32_t start, uint32_t end) {
+    mode_ = splitmode;
+    rootNode_ = std::make_unique<BvhNode>(start, end);
+    for (uint32_t i = start; i < end; ++i) {
+        indices_.push_back(i);
+    }
+}
+
 // reconstruct from a file
 Bvh::Bvh(std::istream& is)
 {
