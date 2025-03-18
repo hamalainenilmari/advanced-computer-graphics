@@ -50,6 +50,8 @@ void AreaLight::sample(float& pdf, Vec3f& p, int base, Random& rnd) {
     // draw a random point on the light source, store result in p
     // evaluate PDF, store result in pdf
 
+    // TODO check the base
+
     float localX = rnd.getF32(-1.0f, 1.0f);
     float localY = rnd.getF32(-1.0f, 1.0f);
 
