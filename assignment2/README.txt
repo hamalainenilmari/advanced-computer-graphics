@@ -13,7 +13,7 @@ Student number: 894931
 
 R1 Integrate old raytracing code (1p): done
             R2 Area light source (3p): done
-                    R3 Radiosity (6p): not done
+                    R3 Radiosity (6p): done
 
 # Did you do any extra credit work?
 
@@ -31,3 +31,4 @@ R1 Integrate old raytracing code (1p): done
 
 (Was the assignment too long? Too hard? Fun or boring? Did you learn something, or was it a total waste of time? Can we do something differently to help you learn? Please be brutally honest; we won't take it personally.)
 
+Fun assignment, I liked 
