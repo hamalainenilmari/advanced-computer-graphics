@@ -58,7 +58,7 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
     if ( ctx.m_currentBounce == 0 )
     {
         // now computing PTE = discrete approximation of direct irridiance
-        // P = Projection (return approximation func of continuous function L)
+        // P = Projection (returns approximation func of continuous function L)
         // T = Transportation (Propagation + Reflection)
         // E = Emission
         Vec3f E(0); // aggregated irradiance
@@ -81,7 +81,7 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
             // shoot ray from current vertex to area light
             RaycastResult res = ctx.m_rt->raycast(o, vectorToLight);
 
-            // ray has not hit something before light ?
+            // ray has hit something before light ?
             if (res.t >= dis - 0.001f) {
                 // if not, add the appropriate emission, 1/r^2 and clamped cosine terms, accounting for the PDF as well.
                 // accumulate into E
@@ -140,16 +140,19 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
             float n1 = rnd.getF32(0.0f, 1.0f);
             float n2 = rnd.getF32(0.0f, 1.0f);
             
-            float r1 = std::sqrt(n1);
-            float theta = 2 * FW_PI * n2;
+            // convert to spherical coordinates
+            float phi = 2 * FW_PI * n1;
+            float theta = std::acos(std::sqrt(n2));
             
-            float x = r1 * std::cos(theta);
-            float y = r1 * std::sin(theta);
+            // cartesian
+            float x = std::sin(theta) * std::cos(phi);
+            float y = std::sin(theta) * std::sin(phi);
+            float z = std::cos(theta);
 
-            Vec3f d0 = Vec3f(x,y, std::sqrt(std::max(0.0f, 1 - n1))); // direction where to shoot ray
+            Vec3f d0 = Vec3f(x,y, z); // direction where to shoot ray
 
-            Vec3f d = B * d0; // transformed to vertex hemisphere
-            pdf = std::cos(theta) / FW_PI;
+            Vec3f d = B * d0 * 100; // transformed to vertex hemisphere, stretch length
+            pdf = z / FW_PI;
 
             // Shoot ray, see where we hit
             const RaycastResult result = ctx.m_rt->raycast( o, d );
@@ -160,25 +163,22 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
 
                 // check for backfaces => don't accumulate if we hit a surface from below!
 
-                /*
+                
                 float angle = d.dot(result.tri->normal());                           // angle between the ray and hit triangle normal
-                if (angle < 0) {
+                if (angle > 0) {
+                    // ignore irradiance if we hit a surface from below
                     continue;
                 }
-                */
 
                 // fetch barycentric coordinates
                 float u = result.u;
                 float v = result.v;
 
                 // Ei = interpolated irradiance determined by ctx.m_vecPrevBounce from vertices using the barycentric coordinates
-                Vec3f o = ctx.m_scene->vertex(v).p + 0.01f * n;
 
-                Vec3f triIndices = result.tri->m_data.vertex_indices; // indices of vertices of triangle we hit
-
-                Vec3f E0 = ctx.m_vecResult[triIndices[0]]; // Irradiance at a vertex of hit triangle
-                Vec3f E1 = ctx.m_vecResult[triIndices[1]];
-                Vec3f E2 = ctx.m_vecResult[triIndices[2]];
+                Vec3f E0 = ctx.m_vecResult[indices[0]]; // Irradiance at a vertex of hit triangle
+                Vec3f E1 = ctx.m_vecResult[indices[1]];
+                Vec3f E2 = ctx.m_vecResult[indices[2]];
 
                 Vec3f Ei = u * E0 + v * E1 + (1 - u - v) * E2; // total incident irradiance
 
@@ -204,19 +204,15 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
 
                     Vec3f diffuse = teximg.getVec4f(texelCoords).getXYZ();  // p(y)
 
-                    // ...
-                    // fr (x) = albedo / pi
-                    Vec3f brdf = diffuse;
-                    // get interpolated
-                    Ei = brdf * Ei;
+                    // get interpolated, diffuse = BRDF
+                    Ei = diffuse * Ei;
 
                 }
                 else
                 {
                     // no texture, use constant albedo from material structure.
                     // (this is just one line)
-                    Vec3f brdf = mat->diffuse.getXYZ();
-                    Ei = brdf * Ei;
+                    Ei = mat->diffuse.getXYZ() * Ei;
                 }
 
                 // We now have the radiosity Li incoming from the point we hit with the raytracer, written as Li = Ei * rho / pi
