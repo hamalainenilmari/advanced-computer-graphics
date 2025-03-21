@@ -19,6 +19,9 @@ R1 Integrate old raytracing code (1p): done
 
 (Describe what you did and, if there was a substantial amount of work involved, how you did it. If your extra features are interactive or can be toggled, describe how to use them.)
 
+Implemented extra Visualizing bounces separately (2p). Added slider to GUI for choosing bounce 0,1,...8 to render individually. 
+Added also two buttons, one for choosing to render the chosen bounce, and one return to normal mode, i.e. render total bounce results.
+
 # Are there any known problems/bugs remaining in your code?
 
 (Please provide a list of the problems. If possible, describe what you think the cause is, how you have attempted to diagnose or fix the problem, and how you would attempt to diagnose or fix it if you had more time or motivation. This is important: we are more likely to assign partial credit if you help us understand what's going on.)
