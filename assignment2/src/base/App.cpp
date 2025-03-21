@@ -44,7 +44,9 @@ App::App(std::vector<std::string>& cmd_args)
 	m_toneMapBoost      (1.0f),
 	m_enableSH			(false),
 	m_shChanged			(false),
-	m_useQMC            (false)
+	m_useQMC            (false),
+
+	m_bounceToVisualize (0)
 {
 
 	m_commonCtrl.showFPS(true);
@@ -106,6 +108,10 @@ App::App(std::vector<std::string>& cmd_args)
 	m_commonCtrl.addSlider(&m_toneMapBoost, 0.05f, 10.0f, true, FW_KEY_NONE, FW_KEY_NONE, "Tone mapping parameter 2= %f");
 	m_commonCtrl.endSliderStack();
 
+	m_commonCtrl.addButton((S32*)&m_action, Action_VisualizeBounce, FW_KEY_NONE, "Visualize selected bounce");
+	m_commonCtrl.addButton((S32*)&m_action, Action_VisualizeAll, FW_KEY_NONE, "Visualize total bounces");
+	m_commonCtrl.addSlider(&m_bounceToVisualize, 0, 8, false, FW_KEY_NONE, FW_KEY_NONE, "Bounce to visualize individually= %d");
+
 	m_window.addListener(this);
 	m_window.addListener(&m_commonCtrl);
 
@@ -123,7 +129,6 @@ App::App(std::vector<std::string>& cmd_args)
 
 
 	process_args(cmd_args);
-
 
 
 	m_commonCtrl.loadState(m_commonCtrl.getStateFileName(1));
@@ -156,7 +161,13 @@ void App::process_args(std::vector<std::string>& args) {
 	m_settings.sample_type = AA_sampling;
 	m_settings.ao_length = 1.0f;
 	m_settings.spp = 1;
-	m_settings.splitMode = SplitMode_Sah;
+	//m_settings.splitMode = SplitMode_Sah;
+	m_settings.splitMode = SplitMode_SpatialMedian;
+
+	// these are used to change visualization to one or all bounces after computing values
+	m_visualizeAllBounces = false;
+	m_visualizeOneBounce = false;
+
 
 	for (unsigned i = 0; i < args.size(); ++i) {
 
@@ -439,7 +450,7 @@ bool App::handleEvent(const Window::Event& ev)
 		break;
 
 	case Action_ComputeRadiosity:
-		m_radiosity->startRadiosityProcess( m_mesh.get(), m_areaLight.get(), m_rt.get(), m_numBounces, m_numDirectRays, m_numHemisphereRays, m_useQMC );
+		m_radiosity->startRadiosityProcess( m_mesh.get(), m_areaLight.get(), m_rt.get(), m_numBounces, m_numDirectRays, m_numHemisphereRays, m_useQMC, m_bounceToVisualize );
 		m_updateClock.start();
 		break;
 
@@ -454,6 +465,18 @@ bool App::handleEvent(const Window::Event& ev)
 		if (name.getLength())
 			saveRadiosity(name);
 		break;
+
+	case Action_VisualizeBounce:
+		std::cout << "call to visualize only single bounce" << std::endl;
+		m_visualizeAllBounces = false;
+		m_visualizeOneBounce = true;
+		//renderFrame(m_window.getGL());
+		break;
+	case Action_VisualizeAll:
+		std::cout << "call to visualize all bounces" << std::endl;
+		m_visualizeAllBounces = true;
+		m_visualizeOneBounce = false;
+		//renderFrame(m_window.getGL());
 	default:
 		FW_ASSERT(false);
 		break;
@@ -570,12 +593,11 @@ void App::renderFrame(GLContext* gl)
 	}
 	GLContext::checkErrors();
 
-	// if we are computing radiosity, refresh mesh colors every 0.5 seconds
-	if (m_shChanged || (m_radiosity->isRunning() && m_updateClock.getElapsed() > 0.5f ))
+	if (m_shChanged || (m_radiosity->isRunning() && m_updateClock.getElapsed() > 0.5f))
 	{
 		m_shChanged = false;
 
-		if (m_radiosity->updateMeshColors(m_sphericalResults1, m_sphericalResults2, m_sphericalResults3, m_enableSH)) {
+		if (m_radiosity->updateMeshColors(m_sphericalResults1, m_sphericalResults2, m_sphericalResults3, m_enableSH, -1)) {
 			if (m_radiosity->isRunning())
 				m_radiosity->checkFinish();
 
@@ -603,6 +625,79 @@ void App::renderFrame(GLContext* gl)
 			m_updateClock.start();
 		}
 	}
+
+	// check if we want to visualize total bounces
+	if (m_visualizeAllBounces) {
+		// if we are computing radiosity, refresh mesh colors every 0.5 seconds
+			m_shChanged = false;
+
+			if (m_radiosity->updateMeshColors(m_sphericalResults1, m_sphericalResults2, m_sphericalResults3, m_enableSH, -1)) {
+				if (m_radiosity->isRunning())
+					m_radiosity->checkFinish();
+
+				glBindBuffer(GL_ARRAY_BUFFER, m_sphericalBuffer1);
+
+				sendTangents(&m_sphericalResults3);
+
+				GLuint spherical1Location = glGetAttribLocation(prog->getHandle(), "sphericalHarmonic1"),
+					spherical2Location = glGetAttribLocation(prog->getHandle(), "sphericalHarmonic2");
+
+				if (spherical1Location != -1) {
+					glBindBuffer(GL_ARRAY_BUFFER, m_sphericalBuffer1);
+					glBufferData(GL_ARRAY_BUFFER, m_sphericalResults1.size() * sizeof(Vec4f), m_sphericalResults1.data(), GL_STATIC_DRAW);
+					glEnableVertexAttribArray(spherical1Location);
+					glVertexAttribPointer(spherical1Location, 4, GL_FLOAT, false, 0, 0);
+				}
+				if (spherical2Location != -1) {
+					glBindBuffer(GL_ARRAY_BUFFER, m_sphericalBuffer2);
+					glBufferData(GL_ARRAY_BUFFER, m_sphericalResults2.size() * sizeof(Vec4f), m_sphericalResults2.data(), GL_STATIC_DRAW);
+					glEnableVertexAttribArray(spherical2Location);
+					glVertexAttribPointer(spherical2Location, 4, GL_FLOAT, false, 0, 0);
+				}
+				GLContext::checkErrors();
+				// restart cycle
+				m_updateClock.start();
+		}
+	}
+	if (m_visualizeOneBounce) {
+		// or if we want to visualize a single bounce
+
+			m_shChanged = false;
+
+			if (m_radiosity->updateMeshColors(m_sphericalResults1, m_sphericalResults2, m_sphericalResults3, m_enableSH, m_bounceToVisualize)) {
+				if (m_radiosity->isRunning())
+					m_radiosity->checkFinish();
+
+				glBindBuffer(GL_ARRAY_BUFFER, m_sphericalBuffer1);
+
+				sendTangents(&m_sphericalResults3);
+
+				GLuint spherical1Location = glGetAttribLocation(prog->getHandle(), "sphericalHarmonic1"),
+					spherical2Location = glGetAttribLocation(prog->getHandle(), "sphericalHarmonic2");
+
+				if (spherical1Location != -1) {
+					glBindBuffer(GL_ARRAY_BUFFER, m_sphericalBuffer1);
+					glBufferData(GL_ARRAY_BUFFER, m_sphericalResults1.size() * sizeof(Vec4f), m_sphericalResults1.data(), GL_STATIC_DRAW);
+					glEnableVertexAttribArray(spherical1Location);
+					glVertexAttribPointer(spherical1Location, 4, GL_FLOAT, false, 0, 0);
+				}
+				if (spherical2Location != -1) {
+					glBindBuffer(GL_ARRAY_BUFFER, m_sphericalBuffer2);
+					glBufferData(GL_ARRAY_BUFFER, m_sphericalResults2.size() * sizeof(Vec4f), m_sphericalResults2.data(), GL_STATIC_DRAW);
+					glEnableVertexAttribArray(spherical2Location);
+					glVertexAttribPointer(spherical2Location, 4, GL_FLOAT, false, 0, 0);
+				}
+				GLContext::checkErrors();
+				// restart cycle
+				m_updateClock.start();
+
+				
+		}
+
+	}
+
+	m_visualizeAllBounces = false;
+	m_visualizeOneBounce = false;
 
 	// Render.
 	GLContext::checkErrors();
@@ -796,7 +891,7 @@ void App::constructTracer()
 	m_rt.reset(new RayTracer());
 
 	// whether we want to try loading a saved hierarchy from disk
-	bool tryLoadHierarchy = true;
+	bool tryLoadHierarchy = false;
 
 	// always construct when measuring performance
 	if (m_settings.batch_render)

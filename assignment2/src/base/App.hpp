@@ -62,7 +62,11 @@ private:
         Action_ComputeRadiosity,
         Action_LoadRadiosity,
         Action_SaveRadiosity,
-		Action_ToggleSphericalHarmonics
+		Action_ToggleSphericalHarmonics,
+
+        Action_VisualizeAll,
+        Action_VisualizeBounce
+
     };
 
     enum CullMode
@@ -167,6 +171,11 @@ private:
     Timer								m_updateClock;
 	GLuint								m_tangentBuffer, m_bitangentBuffer, m_sphericalBuffer1, m_sphericalBuffer2;
 	bool								m_enableSH, m_shChanged, m_useQMC;
+    
+    bool                                m_visualizeOneBounce;
+    bool                                m_visualizeAllBounces;
+
+    int									m_bounceToVisualize;
 };
 
 

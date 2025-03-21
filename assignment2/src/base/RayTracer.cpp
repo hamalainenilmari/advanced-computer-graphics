@@ -181,30 +181,235 @@ void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vec
     }
 }
 
+// Surface Area Heurestic
+void partitionSAH(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb, AABB& lBB, AABB& rBB) {
+
+    // pick planes at uniform intervals from the extent of the parent AABB along all three axis
+    // this will give 3 different splits
+
+    Vec3f midPlane1 = bb.min + ((bb.max - bb.min) * 0.15f);
+    Vec3f midPlane2 = bb.min + ((bb.max - bb.min) * 0.30f);
+    Vec3f midPlane3 = bb.min + ((bb.max - bb.min) * 0.45f);
+    Vec3f midPlane4 = bb.min + ((bb.max - bb.min) * 0.60f);
+    Vec3f midPlane5 = bb.min + ((bb.max - bb.min) * 0.75f);
+    Vec3f midPlane6 = bb.min + ((bb.max - bb.min) * 0.90f);
+
+    // array of each split
+    std::vector<Vec3f> splitPlanes = { midPlane1, midPlane2, midPlane3, midPlane4, midPlane5, midPlane6 };
+    /*
+    std::cout << "----------------------------" << std::endl;
+    std::cout << "new partition: " << std::endl;
+    std::cout << "left: " << start << ", right: " << end << std::endl;
+    std::cout << "bb: " << bb << std::endl;
+
+    Vec3f midPlane2 = bb.min + ((bb.max - bb.min) * 0.25f);
+    Vec3f midPlane3 = bb.min + ((bb.max - bb.min) * 0.50f);
+    Vec3f midPlane4 = bb.min + ((bb.max - bb.min) * 0.75f);
+    */
+    //std::vector<Vec3f> splitPlanes = { midPlane2, midPlane3, midPlane4};
+
+    // initialize the sah
+    float minimalSah = std::numeric_limits<float>::max();
+    uint32_t sahMid = start;
+    Vec3f sahPlane;
+    int sahAxis;
+
+    for (int axis = 0; axis < 3; ++axis) { // each axis like in spacial median
+        for (const Vec3f& splitPlane : splitPlanes) { // each plane
+            //std::cout << "---------------------------------" << std::endl;
+
+            //std::cout << "axis: " << axis << ", plane: " << splitPlane << std::endl;
+
+            auto leftSide = start; // index of starting primitive
+            auto rightSide = end - 1; // index of ending primitive
+
+            // partition the primitives to the new splits
+
+            // create copy out of the original index list
+            std::vector<uint32_t> copiedIndiceList = indiceList;
+
+            while (leftSide <= rightSide) {
+                const Vec3f& centroid = triangles[copiedIndiceList[leftSide]].centroid();
+                if ((axis == 0 && centroid.x < splitPlane.x) ||
+                    (axis == 1 && centroid.y < splitPlane.y) ||
+                    (axis == 2 && centroid.z < splitPlane.z)
+                    ) {
+                    leftSide++; // triangle belongs in the left side partition, move left index
+                }
+                else {
+                    if (rightSide == 0) break;
+                    std::swap(copiedIndiceList[leftSide], copiedIndiceList[rightSide]);
+                    rightSide--;
+
+                }
+            }
+
+            // leftSide contains the index of first element in right side partition = midpoint
+            uint32_t currentPartitionMid = leftSide;
+
+
+            // in case of infinite loop by bad split
+            if (currentPartitionMid == start || currentPartitionMid == end) { //  TODO check thiz
+                currentPartitionMid = (start + (end - start)) / 2;; // currentPartitionMid = start + (end - start) / 2;
+            }
+
+            AABB leftBB = bb;
+            AABB rightBB = bb;
+
+            // create child bbs from parent divided by plane
+            if (axis == 0) {
+                leftBB.max.x = splitPlane.x;
+                rightBB.min.x = splitPlane.x;
+            }
+            else if (axis == 1) {
+                leftBB.max.y = splitPlane.y;
+                rightBB.min.y = splitPlane.y;
+            }
+            else {
+                leftBB.max.z = splitPlane.z;
+                rightBB.min.z = splitPlane.z;
+            }
+
+            // Compute the heuristic for each plane: SAH(i) = AL*NL + AR*NR,
+            int numNodesRight = (end - currentPartitionMid);
+            int numNodesLeft = (currentPartitionMid - start);
+            //std::cout << "num triangles left " << numNodesLeft << ", right: " << numNodesRight << std::endl;
+            float currentSah = leftBB.area() * numNodesLeft + rightBB.area() * numNodesRight;
+            //std::cout << "sah: " << currentSah << std::endl;
+            // keep the lowest sah
+            if (currentSah < minimalSah) {
+
+
+                minimalSah = currentSah;
+                sahMid = currentPartitionMid;
+                sahPlane = splitPlane;
+                sahAxis = axis;
+            }
+        }
+    }
+
+
+
+    //std::cout << "axis: " << sahAxis << ", plane: " << sahPlane << ", mid: " << sahMid << std::endl;
+
+    /*
+    for (uint32_t x = 0; x < indiceList.size(); ++x) {
+        std::cout << "index: " << indiceList[x] << ", centroid :" << triangles[indiceList[x]].centroid() << std::endl;
+    }
+
+    std::cout << "### sorted ###" << std::endl;
+    */
+    // after we have the correct plane and axis, partition the original index list based on it
+    auto leftSide = start; // index of starting primitive
+    auto rightSide = end - 1; // index of ending primitive
+    while (leftSide <= rightSide) {
+        const Vec3f& centroid = triangles[indiceList[leftSide]].centroid();
+        if ((sahAxis == 0 && centroid.x < sahPlane.x) ||
+            (sahAxis == 1 && centroid.y < sahPlane.y) ||
+            (sahAxis == 2 && centroid.z < sahPlane.z)
+            ) {
+            leftSide++; // triangle belongs in the left side partition, move left index
+        }
+        else {
+            if (rightSide == 0) break;
+            std::swap(indiceList[leftSide], indiceList[rightSide]);
+            rightSide--;
+
+        }
+    }
+    /*
+
+    for (uint32_t x = 0; x < indiceList.size(); ++x) {
+        std::cout << "index: " << indiceList[x] << ", centroid :" << triangles[indiceList[x]].centroid() << std::endl;
+    }
+    */
+
+
+
+    lBB = bb;
+    rBB = bb;
+
+    // create child bbs from parent divided by plane
+    if (sahAxis == 0) {
+        lBB.max.x = sahPlane.x;
+        rBB.min.x = sahPlane.x;
+    }
+    else if (sahAxis == 1) {
+        lBB.max.y = sahPlane.y;
+        rBB.min.y = sahPlane.y;
+    }
+    else {
+        lBB.max.z = sahPlane.z;
+        rBB.min.z = sahPlane.z;
+    }
+    //std::cout << "bb L: " << lBB << "bb R: " << rBB << std::endl;
+    mid = sahMid;
+    if (mid == start || mid == end) {
+        mid = start + (end - start) / 2;
+    }
+
+}
+
+
 void RayTracer::constructBvh(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, BvhNode& node, uint32_t start, uint32_t end) {
+    //std::cout << "start: " << start << ", end: " << end << std::endl;
 
     if (node.bb.area() == 0.0f) node.bb = computeBB(triangles, indiceList, start, end); // bounding box of the node
     node.left = nullptr;
     node.right = nullptr;
     uint32_t triCount = end - start;
-    if (triCount > 6) { // this leaf node triangle size proved to be ok
-        uint32_t mid;
-        // in this case only split by spacial median
-        partitionPrimitives(triangles, indiceList, start, end, mid, node.bb);
 
-        node.left = std::make_unique<BvhNode>();
-        node.right = std::make_unique<BvhNode>();
+    switch (m_bvh.splitMode()) {
+    case SplitMode_SpatialMedian:
+        if (triCount > 6) { // this leaf node triangle size proved to be ok
+            //node.bb = computeBB(triangles, indiceList, start, end); // bounding box of the node
+            uint32_t mid;
+            // in this case only split by spacial median
+            partitionPrimitives(triangles, indiceList, start, end, mid, node.bb);
 
-        constructBvh(triangles, indiceList, *node.left, start, mid);
-        constructBvh(triangles, indiceList, *node.right, mid, end);
+            node.left = std::make_unique<BvhNode>();
+            node.right = std::make_unique<BvhNode>();
+
+            constructBvh(triangles, indiceList, *node.left, start, mid);
+            constructBvh(triangles, indiceList, *node.right, mid, end);
+        }
+        else {
+            node.startPrim = start;
+            node.endPrim = end;
+        }
+        break;
+    case SplitMode_Sah:
+        if (triCount > 6) {
+
+            uint32_t mid;
+            AABB lBB, rBB;
+            // SAH partition
+            partitionSAH(triangles, indiceList, start, end, mid, node.bb, lBB, rBB);
+            //std::cout << "lbb: " << lBB << std::endl;
+            node.left = std::make_unique<BvhNode>();
+            node.right = std::make_unique<BvhNode>();
+
+            node.left->bb = lBB;
+            node.right->bb = rBB;
+
+
+            constructBvh(triangles, indiceList, *node.left, start, mid);
+            constructBvh(triangles, indiceList, *node.right, mid, end);
+        }
+        else {
+            /*
+            std::cout << " ------------------- " << std::endl;
+            std::cout << "finished partitioning " << std::endl;
+            std::cout << "primitives start, end: " << start << ", " << end << std::endl;
+            */
+            node.startPrim = start;
+            node.endPrim = end;
+        }
+        break;
     }
-    else {
-        node.startPrim = start;
-        node.endPrim = end;
-    }
-      
 
 }
+
 
 void RayTracer::loadHierarchy(const char* filename, std::vector<RTTriangle>& triangles)
 {
@@ -245,59 +450,35 @@ void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode
 }
 
 // check if there is intersection between ray and bounding box
-bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& node, float& t_start) {
+bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& inverseDir, BvhNode& node, float& t_start) {
 
     // bounding box points
     Vec3f minP = node.bb.min;
     Vec3f maxP = node.bb.max;
 
-    // parallel check
-    if (dir.x == 0.0f) {
-        if (orig.x < minP.x || orig.x > maxP.x) { return false; }
-    }
+    float t1_x = (minP.x - orig.x) * inverseDir.x;
+    float t2_x = (maxP.x - orig.x) * inverseDir.x;
+    float t_min_x = std::min(t1_x, t2_x);
+    float t_max_x = std::max(t1_x, t2_x);
 
-    if (dir.y == 0.0f) {
-        if (orig.y < minP.y || orig.y > maxP.y) { return false; }
-    }
+    float t1_y = (minP.y - orig.y) * inverseDir.y;
+    float t2_y = (maxP.y - orig.y) * inverseDir.y;
+    float t_min_y = std::min(t1_y, t2_y);
+    float t_max_y = std::max(t1_y, t2_y);
 
-    if (dir.z == 0.0f) {
-        if (orig.z < minP.z || orig.z > maxP.z) { return false; }
-    }
+    float t1_z = (minP.z - orig.z) * inverseDir.z;
+    float t2_z = (maxP.z - orig.z) * inverseDir.z;
+    float t_min_z = std::min(t1_z, t2_z);
+    float t_max_z = std::max(t1_z, t2_z);
 
-    Vec3f precompute = Vec3f(1.0 / dir.x, 1.0 / dir.y, 1.0 / dir.z);
+    t_start = std::max({ t_min_x, t_min_y, t_min_z });
+    float t_end = std::min({ t_max_x, t_max_y, t_max_z });
 
-    // x interval
-    float t1_x = (minP.x - orig.x) * precompute.x; // t min x
-    float t2_x = (maxP.x - orig.x) * precompute.x;
-    if (t1_x > t2_x) std::swap(t1_x, t2_x);
-
-    // y interval
-    float t1_y = (minP.y - orig.y) * precompute.y;
-    float t2_y = (maxP.y - orig.y) * precompute.y;
-    if (t1_y > t2_y) std::swap(t1_y, t2_y);
-
-    // z interval
-    float t1_z = (minP.z - orig.z) * precompute.z;
-    float t2_z = (maxP.z - orig.z) * precompute.z;
-    if (t1_z > t2_z) std::swap(t1_z, t2_z);
-
-    // final intersect interval: max of starts, min of ends
-    t_start = std::max(std::max(t1_x, t1_y), t1_z);
-    float t_end = std::min(std::min(t2_x, t2_y), t2_z);
-
-    // box is missed?
-    if (t_start > t_end) {
-        return false;
-    }
-    // box is behind?
-    if (t_end < 0) {
-        return false;
-    }
-
-    return true;
+    return !(t_start > t_end || t_end < 0);
 }
 
-RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const BvhNode& node) {
+
+RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const Vec3f& inverseDir, const BvhNode& node) {
     RaycastResult castresult;
 
     // check if bb has child bbs
@@ -306,30 +487,30 @@ RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const 
         float tStartLeft, tStartRight;
 
         // check children bb ray intersect, return intersect starting points
-        bool intersectLeft = rayBBIntersect(orig, dir, *node.left, tStartLeft);
-        bool intersectRight = rayBBIntersect(orig, dir, *node.right, tStartRight);
+        bool intersectLeft = rayBBIntersect(orig, inverseDir, *node.left, tStartLeft);
+        bool intersectRight = rayBBIntersect(orig, inverseDir, *node.right, tStartRight);
 
         if (intersectLeft && intersectRight) {  // both child node bbs hit
             if (tStartLeft < tStartRight) { // left closer, traverse it first
-                resultLeft = traverseBvh(orig, dir, *node.left);
+                resultLeft = traverseBvh(orig, dir, inverseDir, *node.left);
                 if (resultLeft.tri != nullptr && resultLeft.t < tStartRight) { // if left child hit triangle is closer than right child bb -> skip right child, return result
                     return resultLeft;
                 }
-                resultRight = traverseBvh(orig, dir, *node.right);
+                resultRight = traverseBvh(orig, dir, inverseDir, *node.right);
             }
             else { // traverse right
-                resultRight = traverseBvh(orig, dir, *node.right);
+                resultRight = traverseBvh(orig, dir, inverseDir, *node.right);
                 if (resultRight.tri != nullptr && resultRight.t < tStartLeft) {
                     return resultRight;
                 }
-                resultLeft = traverseBvh(orig, dir, *node.left);
+                resultLeft = traverseBvh(orig, dir, inverseDir, *node.left);
             }
         }
         else if (intersectLeft) { // intersect only left child
-            resultLeft = traverseBvh(orig, dir, *node.left);
+            resultLeft = traverseBvh(orig, dir, inverseDir, *node.left);
         }
         else if (intersectRight) {
-            resultRight = traverseBvh(orig, dir, *node.right);
+            resultRight = traverseBvh(orig, dir, inverseDir, *node.right);
         }
         else { // no intersect for children
             return castresult;
@@ -374,6 +555,7 @@ RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const 
 }
 
 
+
 RaycastResult RayTracer::raycast(const Vec3f& orig, const Vec3f& dir) {
 	++m_rayCount;
 
@@ -381,8 +563,11 @@ RaycastResult RayTracer::raycast(const Vec3f& orig, const Vec3f& dir) {
     // Integrate your implementation here.
     //return m_rt->raycast(orig, dir);
 
+    // precompute dir before recursive BVH traversing
+    Vec3f inverseDir = Vec3f(1.0 / dir.x, 1.0 / dir.y, 1.0 / dir.z);
+
     RaycastResult castresult;
-    castresult = traverseBvh(orig, dir, m_bvh.root());
+    castresult = traverseBvh(orig, dir, inverseDir, m_bvh.root());
 
     return castresult;
 }

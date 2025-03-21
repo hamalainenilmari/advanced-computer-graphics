@@ -53,7 +53,8 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
     //Sleep(1);
     //return;
 
-    
+    //Random rnd;
+
     // direct lighting pass? => integrate direct illumination by shooting shadow rays to light source
     if ( ctx.m_currentBounce == 0 )
     {
@@ -62,16 +63,16 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
         // T = Transportation (Propagation + Reflection)
         // E = Emission
         Vec3f E(0); // aggregated irradiance
+        Random rnd;
+
         for ( int r = 0; r < ctx.m_numDirectRays; ++r )
         {
             // draw sample on light source
             float pdf;
             Vec3f Pl;
 
-            Random rnd; // TODO check if random should be inside the loop, check from asgn1
-
             // generate m_numDirectRays amount random points y_i (Pl), pdf = propability of point
-            ctx.m_light->sample(pdf, Pl, 10, rnd); // TODO check the base
+            ctx.m_light->sample(pdf, Pl, 10, rnd);
 
             // construct vector from current vertex (o) to light sample
             Vec3f vectorToLight = Vec3f(Pl - o);
@@ -93,7 +94,7 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
                 Vec3f emission = ctx.m_light->getEmission();                                     // E(y): radiance emitted from point y
                 float rr = (1 / (dis * dis));
                 // TODO white furnace test: 
-                Vec3f irradiance = emission * rr * theta * thetaLight * (1/pdf);                 // irradiance E
+                Vec3f irradiance = (emission * theta * thetaLight) * (rr) * (1/pdf);                 // irradiance E
                 E = E + irradiance;
             }
         }
@@ -101,6 +102,8 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
         // The result we are computing is _irradiance_ (E), not radiosity, so no rho/pi terms.
         ctx.m_vecCurr[ v ] = E * (1.0f/ctx.m_numDirectRays);
         ctx.m_vecResult[ v ] = ctx.m_vecCurr[ v ];
+        (*ctx.m_bounceVectors[0])[v] = ctx.m_vecCurr[v];
+
     }
 
     
@@ -120,6 +123,7 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
 
         // Get local coordinate system the rays are shot from.
         Mat3f B = formBasis( n );
+        Random rnd;
 
         Vec3f E(0.0f);
         for ( int r = 0; r < ctx.m_numHemisphereRays; ++r )
@@ -134,7 +138,6 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
             // For our scenes, 100 is a good length. (I know, this special casing sucks.)
 
             // cosine weighted direction, p(omega) = cos(theta) / pi
-            Random rnd;
             Vec3f pdf;
 
             float n1 = rnd.getF32(0.0f, 1.0f);
@@ -225,10 +228,11 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
         }
 
         // Store result for this bounce
-
-        ctx.m_vecCurr[ v ] = E * (1.0 / ctx.m_numHemisphereRays);
+        ctx.m_vecCurr[v] = E * (1.0 / ctx.m_numHemisphereRays);
         // Also add to the global accumulator.
-        ctx.m_vecResult[ v ] = ctx.m_vecResult[ v ] + ctx.m_vecCurr[ v ];
+        ctx.m_vecResult[v] = ctx.m_vecResult[v] + ctx.m_vecCurr[v];
+       
+        (*ctx.m_bounceVectors[ctx.m_currentBounce])[v] = ctx.m_vecCurr[v];
 
         // uncomment this to visualize only the current bounce
         //ctx.m_vecResult[ v ] = ctx.m_vecCurr[ v ];	
@@ -239,7 +243,7 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
 }
 // --------------------------------------------------------------------------
 
-void Radiosity::startRadiosityProcess( MeshWithColors* scene, AreaLight* light, RayTracer* rt, int numBounces, int numDirectRays, int numHemisphereRays, bool useQMC )
+void Radiosity::startRadiosityProcess( MeshWithColors* scene, AreaLight* light, RayTracer* rt, int numBounces, int numDirectRays, int numHemisphereRays, bool useQMC, int bounceToRender )
 {
     // put stuff the asyncronous processor needs 
     m_context.m_scene				= scene;
@@ -250,12 +254,57 @@ void Radiosity::startRadiosityProcess( MeshWithColors* scene, AreaLight* light, 
     m_context.m_numDirectRays		= numDirectRays;
     m_context.m_numHemisphereRays	= numHemisphereRays;
     m_context.m_useQMC              = useQMC;
+    m_context.m_bounceToRender      = bounceToRender;
 
     // resize all the buffers according to how many vertices we have in the scene
 	m_context.m_vecResult.resize(scene->numVertices());
     m_context.m_vecCurr.resize( scene->numVertices() );
     m_context.m_vecPrevBounce.resize( scene->numVertices() );
     m_context.m_vecResult.assign( scene->numVertices(), Vec3f(0,0,0) );
+
+    m_context.m_vecBounce0.resize(scene->numVertices());
+    m_context.m_vecBounce0.assign(scene->numVertices(), Vec3f(0, 0, 0));
+
+    m_context.m_vecBounce1.resize(scene->numVertices());
+    m_context.m_vecBounce1.assign(scene->numVertices(), Vec3f(0, 0, 0));
+    
+    m_context.m_vecBounce2.resize(scene->numVertices());
+    m_context.m_vecBounce2.assign(scene->numVertices(), Vec3f(0, 0, 0));
+
+    m_context.m_vecBounce3.resize(scene->numVertices());
+    m_context.m_vecBounce3.assign(scene->numVertices(), Vec3f(0, 0, 0));
+
+    m_context.m_vecBounce4.resize(scene->numVertices());
+    m_context.m_vecBounce4.assign(scene->numVertices(), Vec3f(0, 0, 0));
+
+    m_context.m_vecBounce5.resize(scene->numVertices());
+    m_context.m_vecBounce5.assign(scene->numVertices(), Vec3f(0, 0, 0));
+
+    m_context.m_vecBounce6.resize(scene->numVertices());
+    m_context.m_vecBounce6.assign(scene->numVertices(), Vec3f(0, 0, 0));
+
+    m_context.m_vecBounce7.resize(scene->numVertices());
+    m_context.m_vecBounce7.assign(scene->numVertices(), Vec3f(0, 0, 0));
+
+    m_context.m_vecBounce8.resize(scene->numVertices());
+    m_context.m_vecBounce8.assign(scene->numVertices(), Vec3f(0, 0, 0));
+
+    m_context.m_vecBounce9.resize(scene->numVertices());
+    m_context.m_vecBounce9.assign(scene->numVertices(), Vec3f(0, 0, 0));
+
+    m_context.m_bounceVectors.resize(9);
+    m_context.m_bounceVectors[0] = &m_context.m_vecBounce0;
+    m_context.m_bounceVectors[0] = &m_context.m_vecBounce1;
+    m_context.m_bounceVectors[1] = &m_context.m_vecBounce2;
+    m_context.m_bounceVectors[2] = &m_context.m_vecBounce3;
+    m_context.m_bounceVectors[3] = &m_context.m_vecBounce4;
+    m_context.m_bounceVectors[4] = &m_context.m_vecBounce5;
+    m_context.m_bounceVectors[5] = &m_context.m_vecBounce6;
+    m_context.m_bounceVectors[6] = &m_context.m_vecBounce7;
+    m_context.m_bounceVectors[7] = &m_context.m_vecBounce8;
+    m_context.m_bounceVectors[8] = &m_context.m_vecBounce9;
+
+
 
 	m_context.m_vecSphericalC.resize(scene->numVertices());
 	m_context.m_vecSphericalX.resize(scene->numVertices());
@@ -275,7 +324,7 @@ void Radiosity::startRadiosityProcess( MeshWithColors* scene, AreaLight* light, 
 }
 // --------------------------------------------------------------------------
 
-bool Radiosity::updateMeshColors(std::vector<Vec4f>& spherical1, std::vector<Vec4f>& spherical2, std::vector<float>& spherical3, bool spherical)
+bool Radiosity::updateMeshColors(std::vector<Vec4f>& spherical1, std::vector<Vec4f>& spherical2, std::vector<float>& spherical3, bool spherical, int bounce)
 {
 	if (!m_context.m_scene || m_context.m_vecResult.size()==0) return false;
     // Print progress.
@@ -295,7 +344,21 @@ bool Radiosity::updateMeshColors(std::vector<Vec4f>& spherical1, std::vector<Vec
 			spherical2[i] = Vec4f(m_context.m_vecSphericalY[i], m_context.m_vecSphericalZ[i].z) * (1.0f / FW_PI);
 		}
 		else {
-			m_context.m_scene->mutableVertex(i).c = m_context.m_vecResult[i] * (1.0f / FW_PI);
+            if (bounce == -1) {
+                // this means we will not render ony specific bounce, but render all normally
+                m_context.m_scene->mutableVertex(i).c = m_context.m_vecResult[i] * (1.0f / FW_PI);
+
+            }
+            else {
+
+                // render only a specific bouce radiosity
+                //if (m_context.m_currentBounce == bounce) {
+
+                std::vector<Vec3f> bounces = *m_context.m_bounceVectors[bounce];
+
+                m_context.m_scene->mutableVertex(i).c = bounces[i] * (1.0f / FW_PI);
+            }
+
 		}
 	}
 	return true;
