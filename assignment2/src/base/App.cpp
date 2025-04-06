@@ -112,6 +112,11 @@ App::App(std::vector<std::string>& cmd_args)
 	m_commonCtrl.addButton((S32*)&m_action, Action_VisualizeAll, FW_KEY_NONE, "Visualize total bounces");
 	m_commonCtrl.addSlider(&m_bounceToVisualize, 0, 8, false, FW_KEY_NONE, FW_KEY_NONE, "Bounce to visualize individually= %d");
 
+	m_commonCtrl.addToggle((S32*)&m_action, Action_SetSplitModeSah, FW_KEY_NONE, "Assignment 1 Extra: Set Split Mode to SAH");
+	m_commonCtrl.addToggle((S32*)&m_action, Action_SetSplitModeSpatialMedian, FW_KEY_NONE, "Set split mode to Spatial Median");
+
+
+
 	m_window.addListener(this);
 	m_window.addListener(&m_commonCtrl);
 
@@ -161,8 +166,8 @@ void App::process_args(std::vector<std::string>& args) {
 	m_settings.sample_type = AA_sampling;
 	m_settings.ao_length = 1.0f;
 	m_settings.spp = 1;
-	//m_settings.splitMode = SplitMode_Sah;
-	m_settings.splitMode = SplitMode_SpatialMedian;
+	m_settings.splitMode = SplitMode_Sah;
+	//m_settings.splitMode = SplitMode_SpatialMedian;
 
 	// these are used to change visualization to one or all bounces after computing values
 	m_visualizeAllBounces = false;
@@ -477,6 +482,18 @@ bool App::handleEvent(const Window::Event& ev)
 		m_visualizeAllBounces = true;
 		m_visualizeOneBounce = false;
 		//renderFrame(m_window.getGL());
+	case Action_SetSplitModeSah:
+		std::cout << "Setting split mode to SAH" << std::endl;
+		m_settings.splitMode = SplitMode_Sah;
+
+		constructTracer();
+		break;
+	case Action_SetSplitModeSpatialMedian:
+		std::cout << "Setting split mode to spatial median" << std::endl;
+		m_settings.splitMode = SplitMode_SpatialMedian;
+
+		constructTracer();
+		break;
 	default:
 		FW_ASSERT(false);
 		break;
@@ -944,6 +961,7 @@ void App::constructTracer()
 		QueryPerformanceCounter(&start); // Start time stamp		
 		
 		m_rt->constructHierarchy(m_rtTriangles, m_settings.splitMode);
+
 
 		QueryPerformanceCounter(&stop); // Stop time stamp
 

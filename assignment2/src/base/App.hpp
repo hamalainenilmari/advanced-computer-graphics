@@ -65,7 +65,10 @@ private:
 		Action_ToggleSphericalHarmonics,
 
         Action_VisualizeAll,
-        Action_VisualizeBounce
+        Action_VisualizeBounce,
+
+        Action_SetSplitModeSah,
+        Action_SetSplitModeSpatialMedian
 
     };
 

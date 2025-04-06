@@ -126,6 +126,7 @@ AABB computeBB(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indice
     return AABB(min, max);
 }
 
+// Spatial median
 void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb) {
     // AABB of centroids to create actual split
 
@@ -182,177 +183,113 @@ void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vec
 }
 
 // Surface Area Heurestic
-void partitionSAH(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb, AABB& lBB, AABB& rBB) {
+void RayTracer::partitionSAH(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb, AABB& lBB, AABB& rBB) {
+    if (end - start <= 1) {
+        mid = start;
+        lBB = rBB = bb;
+        return;
+    }
 
-    // pick planes at uniform intervals from the extent of the parent AABB along all three axis
-    // this will give 3 different splits
-
-    Vec3f midPlane1 = bb.min + ((bb.max - bb.min) * 0.15f);
-    Vec3f midPlane2 = bb.min + ((bb.max - bb.min) * 0.30f);
-    Vec3f midPlane3 = bb.min + ((bb.max - bb.min) * 0.45f);
-    Vec3f midPlane4 = bb.min + ((bb.max - bb.min) * 0.60f);
-    Vec3f midPlane5 = bb.min + ((bb.max - bb.min) * 0.75f);
-    Vec3f midPlane6 = bb.min + ((bb.max - bb.min) * 0.90f);
-
-    // array of each split
-    std::vector<Vec3f> splitPlanes = { midPlane1, midPlane2, midPlane3, midPlane4, midPlane5, midPlane6 };
-    /*
-    std::cout << "----------------------------" << std::endl;
-    std::cout << "new partition: " << std::endl;
-    std::cout << "left: " << start << ", right: " << end << std::endl;
-    std::cout << "bb: " << bb << std::endl;
-
-    Vec3f midPlane2 = bb.min + ((bb.max - bb.min) * 0.25f);
-    Vec3f midPlane3 = bb.min + ((bb.max - bb.min) * 0.50f);
-    Vec3f midPlane4 = bb.min + ((bb.max - bb.min) * 0.75f);
-    */
-    //std::vector<Vec3f> splitPlanes = { midPlane2, midPlane3, midPlane4};
-
-    // initialize the sah
+    // initialize values
+    std::vector<float> splitRatios = { 0.10f, 0.20f, 0.30f, 0.40f, 0.5f, 0.60f, 0.70f, 0.80f, 0.90f };
     float minimalSah = std::numeric_limits<float>::max();
     uint32_t sahMid = start;
-    Vec3f sahPlane;
-    int sahAxis;
+    int sahAxis = 0;
 
-    for (int axis = 0; axis < 3; ++axis) { // each axis like in spacial median
-        for (const Vec3f& splitPlane : splitPlanes) { // each plane
-            //std::cout << "---------------------------------" << std::endl;
+    // initialize best child BBs and best sorted indice list
+    AABB bestLeftBB, bestRightBB;
+    std::vector<uint32_t> bestIndiceList = indiceList;
 
-            //std::cout << "axis: " << axis << ", plane: " << splitPlane << std::endl;
+    for (int axis = 0; axis < 3; ++axis) {
+        for (float ratio : splitRatios) {
+            // create split plane
+            Vec3f splitPlane = bb.min + ((bb.max - bb.min) * ratio);
+            float splitValue = (axis == 0) ? splitPlane.x : ((axis == 1) ? splitPlane.y : splitPlane.z);
 
-            auto leftSide = start; // index of starting primitive
-            auto rightSide = end - 1; // index of ending primitive
+            uint32_t left = start;
+            uint32_t right = end - 1;
 
-            // partition the primitives to the new splits
-
-            // create copy out of the original index list
-            std::vector<uint32_t> copiedIndiceList = indiceList;
-
-            while (leftSide <= rightSide) {
-                const Vec3f& centroid = triangles[copiedIndiceList[leftSide]].centroid();
-                if ((axis == 0 && centroid.x < splitPlane.x) ||
-                    (axis == 1 && centroid.y < splitPlane.y) ||
-                    (axis == 2 && centroid.z < splitPlane.z)
-                    ) {
-                    leftSide++; // triangle belongs in the left side partition, move left index
+            // partition list based on primitive centroid and split plane
+            while (left <= right) {
+                const Vec3f& centroid = triangles[indiceList[left]].centroid();
+                if (centroid[axis] < splitValue) {
+                    left++;
                 }
                 else {
-                    if (rightSide == 0) break;
-                    std::swap(copiedIndiceList[leftSide], copiedIndiceList[rightSide]);
-                    rightSide--;
-
+                    std::swap(indiceList[left], indiceList[right]);
+                    if (right > 0) {
+                        right--;
+                    }
+                    else {
+                        break;
+                    }
                 }
             }
 
-            // leftSide contains the index of first element in right side partition = midpoint
-            uint32_t currentPartitionMid = leftSide;
+            // mid index of this partition
+            uint32_t currentMid = left;
 
-
-            // in case of infinite loop by bad split
-            if (currentPartitionMid == start || currentPartitionMid == end) { //  TODO check thiz
-                currentPartitionMid = (start + (end - start)) / 2;; // currentPartitionMid = start + (end - start) / 2;
+            // if all primitives in one side, skip
+            if (currentMid == start || currentMid == end) {
+                continue;
             }
 
-            AABB leftBB = bb;
-            AABB rightBB = bb;
+            // inititalize left, right BBs
+            AABB leftBB, rightBB;
+            leftBB.min = rightBB.min = Vec3f(std::numeric_limits<float>::max());
+            leftBB.max = rightBB.max = Vec3f(std::numeric_limits<float>::lowest());
 
-            // create child bbs from parent divided by plane
-            if (axis == 0) {
-                leftBB.max.x = splitPlane.x;
-                rightBB.min.x = splitPlane.x;
-            }
-            else if (axis == 1) {
-                leftBB.max.y = splitPlane.y;
-                rightBB.min.y = splitPlane.y;
-            }
-            else {
-                leftBB.max.z = splitPlane.z;
-                rightBB.min.z = splitPlane.z;
+            // create tight left child BB
+            for (uint32_t i = start; i < currentMid; ++i) {
+                const RTTriangle& tri = triangles[indiceList[i]];
+                for (int v = 0; v < 3; ++v) {
+                    leftBB.min = min(leftBB.min, tri.m_vertices[v].p);
+                    leftBB.max = max(leftBB.max, tri.m_vertices[v].p);
+                }
             }
 
-            // Compute the heuristic for each plane: SAH(i) = AL*NL + AR*NR,
-            int numNodesRight = (end - currentPartitionMid);
-            int numNodesLeft = (currentPartitionMid - start);
-            //std::cout << "num triangles left " << numNodesLeft << ", right: " << numNodesRight << std::endl;
-            float currentSah = leftBB.area() * numNodesLeft + rightBB.area() * numNodesRight;
-            //std::cout << "sah: " << currentSah << std::endl;
-            // keep the lowest sah
-            if (currentSah < minimalSah) {
+            // create tight right child BB
+            for (uint32_t i = currentMid; i < end; ++i) {
+                const RTTriangle& tri = triangles[indiceList[i]];
+                for (int v = 0; v < 3; ++v) {
+                    rightBB.min = min(rightBB.min, tri.m_vertices[v].p);
+                    rightBB.max = max(rightBB.max, tri.m_vertices[v].p);
+                }
+            }
 
+            // calculate sah = A_left * n_left + A_right * n_right
+            int nLeft = currentMid - start;
+            int nRight = end - currentMid;
+            float sah = leftBB.area() * nLeft + rightBB.area() * nRight;
 
-                minimalSah = currentSah;
-                sahMid = currentPartitionMid;
-                sahPlane = splitPlane;
+            // keep if lower cost than current
+            if (sah < minimalSah) {
+                minimalSah = sah;
+                sahMid = currentMid;
                 sahAxis = axis;
+                bestLeftBB = leftBB;
+                bestRightBB = rightBB;
+                bestIndiceList = indiceList;
             }
         }
     }
 
-
-
-    //std::cout << "axis: " << sahAxis << ", plane: " << sahPlane << ", mid: " << sahMid << std::endl;
-
-    /*
-    for (uint32_t x = 0; x < indiceList.size(); ++x) {
-        std::cout << "index: " << indiceList[x] << ", centroid :" << triangles[indiceList[x]].centroid() << std::endl;
+    // if only bad splits, make this a leaf node
+    if (sahMid == start || sahMid == end) {
+        mid = start;
+        lBB = rBB = bb;
+        return;
     }
-
-    std::cout << "### sorted ###" << std::endl;
-    */
-    // after we have the correct plane and axis, partition the original index list based on it
-    auto leftSide = start; // index of starting primitive
-    auto rightSide = end - 1; // index of ending primitive
-    while (leftSide <= rightSide) {
-        const Vec3f& centroid = triangles[indiceList[leftSide]].centroid();
-        if ((sahAxis == 0 && centroid.x < sahPlane.x) ||
-            (sahAxis == 1 && centroid.y < sahPlane.y) ||
-            (sahAxis == 2 && centroid.z < sahPlane.z)
-            ) {
-            leftSide++; // triangle belongs in the left side partition, move left index
-        }
-        else {
-            if (rightSide == 0) break;
-            std::swap(indiceList[leftSide], indiceList[rightSide]);
-            rightSide--;
-
-        }
-    }
-    /*
-
-    for (uint32_t x = 0; x < indiceList.size(); ++x) {
-        std::cout << "index: " << indiceList[x] << ", centroid :" << triangles[indiceList[x]].centroid() << std::endl;
-    }
-    */
-
-
-
-    lBB = bb;
-    rBB = bb;
-
-    // create child bbs from parent divided by plane
-    if (sahAxis == 0) {
-        lBB.max.x = sahPlane.x;
-        rBB.min.x = sahPlane.x;
-    }
-    else if (sahAxis == 1) {
-        lBB.max.y = sahPlane.y;
-        rBB.min.y = sahPlane.y;
-    }
-    else {
-        lBB.max.z = sahPlane.z;
-        rBB.min.z = sahPlane.z;
-    }
-    //std::cout << "bb L: " << lBB << "bb R: " << rBB << std::endl;
+    
+    // return final best values
+    indiceList = bestIndiceList;
     mid = sahMid;
-    if (mid == start || mid == end) {
-        mid = start + (end - start) / 2;
-    }
-
+    lBB = bestLeftBB;
+    rBB = bestRightBB;
 }
 
 
 void RayTracer::constructBvh(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, BvhNode& node, uint32_t start, uint32_t end) {
-    //std::cout << "start: " << start << ", end: " << end << std::endl;
 
     if (node.bb.area() == 0.0f) node.bb = computeBB(triangles, indiceList, start, end); // bounding box of the node
     node.left = nullptr;
@@ -379,29 +316,33 @@ void RayTracer::constructBvh(std::vector<RTTriangle>& triangles, std::vector<uin
         }
         break;
     case SplitMode_Sah:
-        if (triCount > 6) {
+        if (triCount > 13) {
 
             uint32_t mid;
             AABB lBB, rBB;
             // SAH partition
+            
+            //std::cout << "before: start: " << start << ", end: " << end;
             partitionSAH(triangles, indiceList, start, end, mid, node.bb, lBB, rBB);
-            //std::cout << "lbb: " << lBB << std::endl;
-            node.left = std::make_unique<BvhNode>();
-            node.right = std::make_unique<BvhNode>();
+            //std::cout << "after: start: " << start << ", mid: " << mid;
 
-            node.left->bb = lBB;
-            node.right->bb = rBB;
+            // if bad split, stop recursion
+            if (mid == start) {
+                node.startPrim = start;
+                node.endPrim = end;
+            }
+            else {
+                node.left = std::make_unique<BvhNode>();
+                node.right = std::make_unique<BvhNode>();
 
+                node.left->bb = lBB;
+                node.right->bb = rBB;
 
-            constructBvh(triangles, indiceList, *node.left, start, mid);
-            constructBvh(triangles, indiceList, *node.right, mid, end);
+                constructBvh(triangles, indiceList, *node.left, start, mid);
+                constructBvh(triangles, indiceList, *node.right, mid, end);
+            }
         }
         else {
-            /*
-            std::cout << " ------------------- " << std::endl;
-            std::cout << "finished partitioning " << std::endl;
-            std::cout << "primitives start, end: " << start << ", " << end << std::endl;
-            */
             node.startPrim = start;
             node.endPrim = end;
         }

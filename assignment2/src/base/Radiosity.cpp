@@ -83,7 +83,7 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
             RaycastResult res = ctx.m_rt->raycast(o, vectorToLight);
 
             // ray has hit something before light ?
-            if (res.t >= dis - 0.001f) {
+            if (res.t >= dis - 0.00001f) {
                 // if not, add the appropriate emission, 1/r^2 and clamped cosine terms, accounting for the PDF as well.
                 // accumulate into E
                
@@ -92,9 +92,9 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
                 float theta = std::max(0.0f, incomingLightDir.dot(n));                           // angle between the incoming direction w and the surface normal at x
                 float thetaLight = std::max(0.0f, -vectorToLight.dot(ctx.m_light->getNormal())); // angle between the vector yx (from light to point) and the surface normal of the light
                 Vec3f emission = ctx.m_light->getEmission();                                     // E(y): radiance emitted from point y
-                float rr = (1 / (dis * dis));
-                // TODO white furnace test: 
-                Vec3f irradiance = (emission * theta * thetaLight) * (rr) * (1/pdf);                 // irradiance E
+                float rr = (1.0f / (dis * dis));
+
+                Vec3f irradiance = (emission * theta * thetaLight) * (rr) * (1.0f/pdf);                 // irradiance E
                 E = E + irradiance;
             }
         }
@@ -103,9 +103,7 @@ void Radiosity::vertexTaskFunc( MulticoreLauncher::Task& task )
         ctx.m_vecCurr[ v ] = E * (1.0f/ctx.m_numDirectRays);
         ctx.m_vecResult[ v ] = ctx.m_vecCurr[ v ];
         (*ctx.m_bounceVectors[0])[v] = ctx.m_vecCurr[v];
-
     }
-
     
     else
     {

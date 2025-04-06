@@ -36,6 +36,7 @@ public:
     RaycastResult		raycast					(const Vec3f& orig, const Vec3f& dir);
 
     void RayTracer::partitionPrimitives(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb);
+    void RayTracer::partitionSAH(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, uint32_t start, uint32_t end, uint32_t& mid, AABB bb, AABB& lBB, AABB& rBB);
     void RayTracer::constructBvh(std::vector<RTTriangle>& triangles, std::vector<uint32_t>& indiceList, BvhNode& node, uint32_t start, uint32_t end);
     RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const Vec3f& inverseDir,  const BvhNode& node);
     bool RayTracer::rayBBIntersect(const Vec3f& orig, const Vec3f& dir, BvhNode& node, float& t_start);
