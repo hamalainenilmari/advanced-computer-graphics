@@ -6,7 +6,7 @@
 #include <chrono>
 #include <algorithm>
 #include <string>
-
+#include <cmath>
 
 
 namespace FW {
@@ -21,6 +21,46 @@ namespace FW {
 		// Read value from albedo texture into diffuse.
 	    // If textured, use the texture; if not, use Material.diffuse.
 	    // Note: You can probably reuse parts of the radiosity assignment.
+
+        Vec2f t1 = hit.tri->m_vertices[0].t;
+        Vec2f t2 = hit.tri->m_vertices[1].t;
+        Vec2f t3 = hit.tri->m_vertices[2].t;
+
+        float u = hit.u;
+        float v = hit.v;
+
+        Vec3f n0 = hit.tri->m_vertices[0].n;
+        Vec3f n1 = hit.tri->m_vertices[1].n;
+        Vec3f n2 = hit.tri->m_vertices[2].n;
+
+        n = ((1.0f - u - v) * n0 + u * n1 + v * n2).normalized(); // barycentric interpolation of normals and hitpoint = smoothed normal
+
+        // check if has texture
+        if (mat->textures[MeshBase::TextureType_Diffuse].exists())
+        {
+            // yes, read diffuse texture
+
+            // TODO:
+            // Note that you will have to apply gamma correction to diffuse values read from a texture.
+            // This means that you will have to raise all components of diffuse to power 2.2.
+            // also check normal and specular usage
+
+            const Texture& tex = mat->textures[MeshBase::TextureType_Diffuse];
+            const Image& teximg = *tex.getImage();
+
+            Vec2f uv = (1.0f - u - v) * t1 + u * t2 + v * t3; // barycentric interpolation
+            Vec2i texelCoords = getTexelCoords(uv, teximg.getSize());
+
+            Vec3f d0 = teximg.getVec4f(texelCoords).getXYZ();  // p(y)
+            diffuse = Vec3f( pow(d0.x, 2.2f), pow(d0.y, 2.2f), pow(d0.z, 2.2f));
+        }
+        else {
+            // no texture
+            diffuse = mat->diffuse.getXYZ();
+            //diffuse = Vec3f(pow(d0.x, 2.2f), pow(d0.y, 2.2f), pow(d0.z, 2.2f));
+        }
+
+
 	}
 
 
@@ -95,47 +135,197 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
 	// NOTE that it's not normalized; the direction Rd is defined
 	// so that the segment to be traced is [Ro, Ro+Rd], i.e.,
 	// intersections that come _after_ the point Ro+Rd are to be discarded.
-	Rd = Rd - Ro;
+	Rd = Rd - Ro;  // initial ray direction
 
-	// trace!
-	RaycastResult result = rt->raycast(Ro, Rd);
-	const RTTriangle* pHit = result.tri;
+    // trace!
+    RaycastResult result = rt->raycast(Ro, Rd); // shoot the ray
+    const RTTriangle* pHit = result.tri; // hit point triangle
 
-	// Ray from camera directly hits an emitter. We can stop if we assume the emitter does not reflect light, only emits.
-	if ((result.tri != nullptr)) {
-		MeshBase::Material* mat = result.tri->m_material;
-		if (mat->emission.lenSqr() > 0.0f) { // 'Very direct' light
-			return Rd.dot(result.tri->normal()) > 0.0 ? mat->emission : Vec3f(0.0f);
-		}
-	}
+    // Ray from camera directly hits an emitter. We can stop if we assume the emitter does not reflect light, only emits.
+    if ((result.tri != nullptr)) {
+        MeshBase::Material* mat = result.tri->m_material;
+        if (mat->emission.lenSqr() > 0.0f) { // 'Very direct' light
+            return Rd.dot(result.tri->normal()) > 0.0 ? mat->emission : Vec3f(0.0f);
+        }
+    }
+    else {
+        // ray does not hit anything in scene -> output zero for this pixel
+        return Vec3f(0.0f);
+        //Vec3f::setZero
+    }
 
-	// if we hit something, fetch a color and insert into image
-	Vec3f Ei;
-	Vec3f throughput(1, 1, 1);
-	float p = 1.0f;
+    // if we hit something, fetch a color and insert into image
+    Vec3f Ei;
+    Vec3f throughput(1, 1, 1);
+    float p = 1.0f;
 
-	if (result.tri != nullptr)
-	{
-		// YOUR CODE HERE (R2-R4):
-		// Implement path tracing with direct light and shadows, scattering and Russian roulette.
+    int currentBounce = 0;
+    Vec3f E(0.0f); // total radiance
 
-		Ei = result.tri->m_material->diffuse.getXYZ(); // placeholder
+    // we hit something, enter path tracing stage and loop the path for bounce times
+    while (currentBounce < ctx.m_bounces) {
+        if (result.tri != nullptr)
+        {
+            // YOUR CODE HERE (R2-R4):
+            // Implement path tracing with direct light and shadows, scattering and Russian roulette.
+
+            /*
+            Determine the hit point coordinates, normal, barycentric coordinates and
+            the surface color. Like in the previous assignments, the color is determined
+            from the surface diffuse color or the texture if it is present. Implement the
+            color fetching in PathTraceRenderer::getTextureParameters(). Note that
+            you will have to apply gamma correction to diffuse values read from a texture. 
+            This means that you will have to raise all components of diffuse to
+            power 2.2. This is necessary, because images are gamma encoded in order
+            to optimize bit usage. To get smooth normals, interpolate the vertex normals
+            to the hit position and normalize it. The normal is interpolated according to
+            the hit barycentrics similarly to texture coordinates.
+            */ 
+
+            result.u; // hit triangle bary u
+            result.v; // hit triangle bary v
+            result.point; // hit point in hit triangle
+            pHit->normal(); // hit triangle normal
+            pHit->m_material->specular; // specular / shiny
+            pHit->m_material->diffuse.getXYZ(); // diffuse / color
+            pHit->m_material->textures[MeshBase::TextureType_Diffuse]; // diffuse texture, check if exists before useis
 
 
-		if (debugVis)
-		{
-			// Example code for using the visualization system. You can expand this to include further bounces, 
-			// shadow rays, and whatever other useful information you can think of.
-			PathVisualizationNode node;
-			node.lines.push_back(PathVisualizationLine(result.orig, result.point)); // Draws a line between two points
-			node.lines.push_back(PathVisualizationLine(result.point, result.point + result.tri->normal() * .1f, Vec3f(1,0,0))); // You can give lines a color as optional parameter.
-			node.labels.push_back(PathVisualizationLabel("diffuse: " + std::to_string(Ei.x) + ", " + std::to_string(Ei.y) + ", " + std::to_string(Ei.z), result.point)); // You can also render text labels with world-space locations.
-			
-			visualization.push_back(node);
-		}
-	}
+            Vec3f diffuse(0.0f);
+            Vec3f specular(0.0f);
+            Vec3f smoothedN(0.0f);
 
-	return Ei;
+            // 1. get surface (diffuse) color, smoothed/interpolated normal,
+            getTextureParameters(result, diffuse, smoothedN, specular);
+
+            const Vec3i& indices = result.tri->m_data.vertex_indices;
+
+            // check for backfaces => don't accumulate if we hit a surface from below!
+            /*
+            float angle = Rd.dot(result.tri->normal());                           // angle between the ray and hit triangle normal
+            if (angle > 0) {
+                // ignore irradiance if we hit a surface from below
+                continue;
+            }
+            */
+
+            // fetch barycentric coordinates
+            float u = result.u;
+            float v = result.v;
+
+            // Ei = interpolated irradiance
+
+            Vec3f E0 = indices[0]; // Irradiance at a vertex of hit triangle
+            Vec3f E1 = indices[1];
+            Vec3f E2 = indices[2];
+
+            //Vec3f Ei = u * E0 + v * E1 + (1 - u - v) * E2; // total incident irradiance
+
+            // Divide incident irradiance by PI so that we can turn it into outgoing
+            // radiosity by multiplying by the reflectance factor below.
+            Ei = (1.0f / FW_PI);
+
+            Ei = diffuse * Ei;
+            //E += Ei;
+
+            /*
+            Draw a point from the light source surface, trace a shadow ray, and add the
+            appropriate contribution to the radiance returned by the path. Be careful
+            with the probabilities. This is what we called “next event estimation” at the
+            lectures.
+            */
+
+            // at each hit, we also sample light for shadow rays in path tracing
+            
+            float pdfL; // probability distribution function of the light source sample
+            Vec3f Pl;   // point on the light source
+
+            // draw a point from light source surface
+            ctx.m_light->sample(pdfL, Pl, samplerBase, R);
+
+            // construct vector from hit point to light sample
+            Vec3f vectorToLight = Vec3f(Pl - result.point);
+
+            float dis = vectorToLight.length(); // store distance between vertex and light point to check if ray hits something before light
+
+            // shoot ray from hit point to area light = trace shadow ray
+            RaycastResult res = ctx.m_rt->raycast(result.point, vectorToLight);
+
+            // TODO "next event estimation" & check probabilities
+
+            if (res.t >= dis - 0.00001f) {
+                // if not, add the appropriate emission, 1/r^2 and clamped cosine terms, accounting for the PDF as well.
+                // accumulate into E
+
+                Vec3f incomingLightDir = vectorToLight.normalized();                             // unit vector of direction to light
+
+                float theta = std::max(0.0f, incomingLightDir.dot(smoothedN));                   // angle between the incoming direction w and the surface normal at x
+                float thetaLight = std::max(0.0f, -vectorToLight.dot(ctx.m_light->getNormal())); // angle between the vector yx (from light to point) and the surface normal of the light
+                Vec3f emission = ctx.m_light->getEmission();                                     // E(y): radiance emitted from point y
+                float rr = (1.0f / (dis * dis));
+
+                Vec3f irradiance = (emission * theta * thetaLight) * (rr) * (1.0f / pdfL);        // irradiance E
+                /*
+                std::cout << "emission: " << emission << std::endl;
+                std::cout << "theta: " << theta << std::endl;
+                std::cout << "thetaLight: " << thetaLight << std::endl;
+                std::cout << "rr: " << rr << std::endl;
+                std::cout << "pdf: " << pdf << std::endl;
+                */
+                E = E + irradiance;
+            }
+
+            //Ei = result.tri->m_material->diffuse.getXYZ(); // placeholder
+
+            // INDIRECT RAY CASTING: cosine weighted direction, p(omega) = cos(theta) / pi
+
+            float n1 = R.getF32(0.0f, 1.0f);
+            float n2 = R.getF32(0.0f, 1.0f);
+
+            // convert to spherical coordinates
+            float phi = 2 * FW_PI * n1;
+            float theta = std::acos(std::sqrt(n2));
+
+            // cartesian
+            float x = std::sin(theta) * std::cos(phi);
+            float y = std::sin(theta) * std::sin(phi);
+            float z = std::cos(theta);
+
+            Vec3f d0 = Vec3f(x, y, z); // direction where to shoot next ray from hit point
+
+            Mat3f B = formBasis(smoothedN);
+
+            Rd = B * d0 * 100; // NEW DIRECTION: transformed to vertex hemisphere, stretch length
+            float pdf = z / FW_PI;  // probability distrbution function of ray from hit to hemisphere
+
+            // Shoot ray, see where we hit next
+            result = ctx.m_rt->raycast(result.point, Rd);
+            
+            if (result.tri == nullptr) {
+                break;
+            }
+
+            Pl = result.point;
+
+            // then back to start of loop, and check if this ray hits anything
+
+
+            if (debugVis)
+            {
+                // Example code for using the visualization system. You can expand this to include further bounces, 
+                // shadow rays, and whatever other useful information you can think of.
+                PathVisualizationNode node;
+                node.lines.push_back(PathVisualizationLine(result.orig, result.point)); // Draws a line between two points
+                node.lines.push_back(PathVisualizationLine(result.point, result.point + result.tri->normal() * .1f, Vec3f(1, 0, 0))); // You can give lines a color as optional parameter.
+                node.labels.push_back(PathVisualizationLabel("diffuse: " + std::to_string(Ei.x) + ", " + std::to_string(Ei.y) + ", " + std::to_string(Ei.z), result.point)); // You can also render text labels with world-space locations.
+
+                visualization.push_back(node);
+            }
+        }
+        currentBounce += 1;
+    }
+    //std::cout << "E: " << E << std::endl;
+	return E;
 }
 
 // This function is responsible for asynchronously generating paths for a given block.
