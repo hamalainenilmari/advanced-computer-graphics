@@ -182,7 +182,6 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
                 // we hit light with indirect
                 //Ei += throughput * mat->emission;
                 //return Ei;
-                //return Ei;
                 break;
             }
             
@@ -214,21 +213,23 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
             ctx.m_light->sample(pdfL, Pl, samplerBase, R);
 
             // small offset to prevent self-shadowing
-            Vec3f origin = result.point + smoothedN * eps;
+            Vec3f hitOrigin = result.point + smoothedN * eps;
 
             // construct vector from hit point to the light sample
-            Vec3f vectorToLight = Vec3f(Pl - origin); 
+            Vec3f vectorToLight = Vec3f(Pl - hitOrigin);
 
             float dis = vectorToLight.length(); // distance between vertex and light point to check if ray hits something before light
 
             // shoot ray from hit point to area light = trace shadow ray
-            RaycastResult res = ctx.m_rt->raycast(origin, vectorToLight );
+            RaycastResult shadowRayRes = ctx.m_rt->raycast(hitOrigin, vectorToLight.normalized() );
 
             Vec3f shadowE;
             float theta0 = -69.0f;
             float thetaLight = -69.0f;
             // check if we hit anything before area light source i.e. visibility
-            if (res.t >= dis  - 0.01f || res.tri == nullptr) {
+            //shadowRayRes.tri
+            const RTTriangle* shadowHit = shadowRayRes.tri;
+            if (shadowRayRes.t >= dis - 0.001f ) {
 
                 Vec3f incomingLightDir = vectorToLight.normalized();                             // unit vector of direction to light
                 theta0 = std::max( 0.0f, incomingLightDir.dot(smoothedN) );                  // angle between the incoming direction w and the surface normal at x
@@ -295,7 +296,7 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
             throughput *= brdf * cosTheta / pdf;
 
             // Shoot ray, see where we hit next
-            result = ctx.m_rt->raycast(result.point + eps * smoothedN, Rd);
+            result = ctx.m_rt->raycast(hitOrigin, Rd);
 
             
             if (result.tri == nullptr) {
@@ -311,10 +312,15 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
                 node.lines.push_back(PathVisualizationLine(result.orig, result.point)); // Draws a line between two points
                 node.lines.push_back(PathVisualizationLine(result.point, result.point + result.tri->normal() * .1f, Vec3f(1, 0, 0))); // You can give lines a color as optional parameter.
                 
-                node.lines.push_back(PathVisualizationLine(result.point, Pl, Vec3f(0, 1, 1))); // shadow ray.
-                node.labels.push_back(PathVisualizationLabel("radiance light: " + std::to_string(shadowE.x) + ", " + std::to_string(shadowE.y) + ", " + std::to_string(shadowE.z), result.point)); // You can also render text labels with world-space locations.
-                node.labels.push_back(PathVisualizationLabel("thetas: " + std::to_string(theta0) + ", " + std::to_string(thetaLight), result.point + result.tri->normal() * 0.05f)); // You can also render text labels with world-space locations.
-                node.labels.push_back(PathVisualizationLabel("shadow ray point: " + std::to_string(res.point.x) + ", " + std::to_string(res.point.y) + ", " + std::to_string(res.point.z), res.point)); // You can also render text labels with world-space locations.
+                node.lines.push_back(PathVisualizationLine(hitOrigin, Pl, Vec3f(0, 1, 1))); // shadow ray.
+                //node.labels.push_back(PathVisualizationLabel("radiance light: " + std::to_string(shadowE.x) + ", " + std::to_string(shadowE.y) + ", " + std::to_string(shadowE.z), result.point)); // You can also render text labels with world-space locations.
+                node.labels.push_back(PathVisualizationLabel("res T: " + std::to_string(shadowRayRes.t) + ", distance: " + std::to_string(dis) + ", res == nullprs: " + std::to_string(shadowRayRes.tri == nullptr), hitOrigin * 1.05f)); // You can also render text labels with world-space locations.
+                //node.labels.push_back(PathVisualizationLabel("thetas: " + std::to_string(theta0) + ", " + std::to_string(thetaLight), result.point + result.tri->normal() * 0.05f)); // You can also render text labels with world-space locations.
+                node.labels.push_back(PathVisualizationLabel("shadow ray point: " + std::to_string(shadowRayRes.point.x) + ", " + std::to_string(shadowRayRes.point.y) + ", " + std::to_string(shadowRayRes.point.z), shadowRayRes.point)); // You can also render text labels with world-space locations.
+
+                node.labels.push_back(PathVisualizationLabel("PL: " + std::to_string(Pl.x) + ", " + std::to_string(Pl.y) + ", " + std::to_string(Pl.z), Pl)); // You can also render text labels with world-space locations.
+                
+                node.labels.push_back(PathVisualizationLabel("origin: " + std::to_string(hitOrigin.x) + ", " + std::to_string(hitOrigin.y) + ", " + std::to_string(hitOrigin.z), hitOrigin)); // You can also render text labels with world-space locations.
 
                 node.lines.push_back(PathVisualizationLine(light->getPosition(), light->getPosition() + light->getNormal() * .1f, Vec3f(1, 0, 1))); // You can give lines a color as optional parameter.
 
@@ -324,6 +330,9 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
 
                 visualization.push_back(node);
             }
+        }
+        else {
+            break;
         }
         currentBounce++;
         // back to the loop
