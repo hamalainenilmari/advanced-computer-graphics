@@ -41,8 +41,7 @@ namespace FW {
             // yes, read diffuse texture
 
             // TODO:
-            // Note that you will have to apply gamma correction to diffuse values read from a texture.
-            // This means that you will have to raise all components of diffuse to power 2.2.
+
             // also check normal and specular usage
 
             const Texture& tex = mat->textures[MeshBase::TextureType_Diffuse];
@@ -104,7 +103,6 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
 
     Vec3f emission = light->getEmission();                                     // E(y): radiance emitted from point y, if only one light source this is constant
 
-
 	// make sure we're on CPU
 	//image->getMutablePtr();
 
@@ -160,28 +158,20 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
     // if we hit something, fetch a color and insert into image
     Vec3f Ei;
     Vec3f throughput(1, 1, 1);
-    float p = 1.0f * 0.10f; // probability density of full path
 
     bool rr = ctx.m_bounces < 0;  // Russian Roulette mode
-
     float eps = 0.001f;
-   
-    //bool continuePath = true;
     int currentBounce = 0;
-    //Vec3f E(0.0f); // total radiance
-    //std::cout << " current b: " << currentBounce << ", ctx b: " << ctx.m_bounces << std::endl;
 
     // we hit something, enter path tracing stage and loop until terminate by bounce limit or russian roulette
     while (true) {
         if (!rr && currentBounce > ctx.m_bounces) { break; }
         if (result.tri != nullptr)
         {   
-            
             MeshBase::Material* mat = result.tri->m_material;
             if (mat->emission.lenSqr() > 0.0f) {
                 // we hit light with indirect
                 //Ei += throughput * mat->emission;
-                //return Ei;
                 break;
             }
             
@@ -197,16 +187,7 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
             getTextureParameters(result, diffuse, smoothedN, specular);
 
             Vec3f brdf = diffuse * (1.0f / FW_PI);
-
             float pdfL; // probability distribution function of the light source sample
-
-            /*
-            if (brdf.x < 0.01f && brdf.y < 0.01f && brdf.z < 0.01f) {
-                //std::cout << "??";
-                brdf = Vec3f(0.5f);
-            }
-            */
-
             Vec3f Pl;   // sampled point on the light source
 
             // draw a point from light source surface for shadow ray tracing
@@ -219,48 +200,34 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
             Vec3f vectorToLight = Vec3f(Pl - hitOrigin);
 
             float dis = vectorToLight.length(); // distance between vertex and light point to check if ray hits something before light
+            vectorToLight = vectorToLight.normalized(); // normalize for direction
 
             // shoot ray from hit point to area light = trace shadow ray
-            RaycastResult shadowRayRes = ctx.m_rt->raycast(hitOrigin, vectorToLight.normalized() );
+            RaycastResult shadowRayRes = ctx.m_rt->raycast(hitOrigin, vectorToLight );
 
-            Vec3f shadowE;
-            float theta0 = -69.0f;
-            float thetaLight = -69.0f;
             // check if we hit anything before area light source i.e. visibility
-            //shadowRayRes.tri
             const RTTriangle* shadowHit = shadowRayRes.tri;
-            if (shadowRayRes.t >= dis - 0.001f ) {
+            //if (shadowRayRes.t >= dis - 0.001f) {
+            if (shadowRayRes.tri != nullptr && shadowRayRes.tri->m_material->emission.lenSqr() > 0.0f) {
 
-                Vec3f incomingLightDir = vectorToLight.normalized();                             // unit vector of direction to light
-                theta0 = std::max( 0.0f, incomingLightDir.dot(smoothedN) );                  // angle between the incoming direction w and the surface normal at x
-                thetaLight = std::max( 0.0f, -incomingLightDir.dot(ctx.m_light->getNormal()) ); // angle between the vector yx (from light to point) and the surface normal of the light
-                float rr = (1.0f / (dis * dis));                                                 // squared distance
+                Vec3f incomingLightDir = vectorToLight;                             // unit vector of direction to light
+                float theta0 = std::max( 0.0f, incomingLightDir.dot(smoothedN) );                  // angle between the incoming direction w and the surface normal at x
+                float thetaLight = std::max( 0.0f, -incomingLightDir.dot(ctx.m_light->getNormal()) ); // angle between the vector yx (from light to point) and the surface normal of the light
+                float r_cube = (1.0f / (dis * dis));                                                 // squared distance
         
                 // result += V(hit,y)*E(y,y->hit)*BRDF*cos*G(hit,y)/pdf1
                 // this is irradiance from light to the hit point (direct lighting)
-                shadowE = throughput * (emission * brdf * theta0 * thetaLight) * rr * (1.0f / pdfL);
-                Ei += shadowE;
-                //Ei += throughput * (emission * brdf * theta0 * thetaLight) * rr * (1.0f / pdfL);        
-
+                Ei += throughput * (emission * brdf * theta0 * thetaLight) * r_cube * (1.0f / pdfL);
             }
  
 
-            // Russian Roulette termination?
+            // Russian Roulette termination
             if (rr) {
-                //std::cout << "RR: current bounce: " << currentBounce << std::endl;
                 if (-1 * currentBounce <= ctx.m_bounces) {
-                    //std::cout << "Time to play RR " << std::endl;
-
                     bool terminate = R.getF32(0.0f, 1.0f) > 0.80f; // terminate with 20 % probability
-                    //std::cout << "Terminate? " << terminate << std::endl;
-
-                    if (terminate) {
-                        break;
-                    }
+                    if (terminate) break;
                     // contribute to the ray
-                    throughput *= 0.80f;
-
-                    p *= 0.80f;
+                    throughput *= (1.0f / 0.80f);
                 }
             }
 
@@ -282,7 +249,7 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
 
             Mat3f B = formBasis(smoothedN);
 
-            Rd = B * d0;    // NEW DIRECTION: transformed to vertex hemisphere, stretch length
+            Rd = (B * d0);    // NEW DIRECTION: transformed to vertex hemisphere,
 
             // angle between outgoing direction and current point normal
             float cosTheta = std::max(0.0f, Rd.dot(smoothedN));
@@ -290,19 +257,10 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
             // PDF: p(omega) = cos(theta) / pi
             float pdf = (cosTheta / FW_PI);
 
-            p *= pdf;
-
-            // result += BRDF(hit,-dir(ray),w) * cos(theta) * trace(ray(hit, w)) / pdf / 0.5
             throughput *= brdf * cosTheta / pdf;
 
             // Shoot ray, see where we hit next
             result = ctx.m_rt->raycast(hitOrigin, Rd);
-
-            
-            if (result.tri == nullptr) {
-                // hit nothing, terminate
-                break;
-            }
             
             if (debugVis)
             {
@@ -311,22 +269,16 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
                 PathVisualizationNode node;
                 node.lines.push_back(PathVisualizationLine(result.orig, result.point)); // Draws a line between two points
                 node.lines.push_back(PathVisualizationLine(result.point, result.point + result.tri->normal() * .1f, Vec3f(1, 0, 0))); // You can give lines a color as optional parameter.
-                
                 node.lines.push_back(PathVisualizationLine(hitOrigin, Pl, Vec3f(0, 1, 1))); // shadow ray.
                 //node.labels.push_back(PathVisualizationLabel("radiance light: " + std::to_string(shadowE.x) + ", " + std::to_string(shadowE.y) + ", " + std::to_string(shadowE.z), result.point)); // You can also render text labels with world-space locations.
-                node.labels.push_back(PathVisualizationLabel("res T: " + std::to_string(shadowRayRes.t) + ", distance: " + std::to_string(dis) + ", res == nullprs: " + std::to_string(shadowRayRes.tri == nullptr), hitOrigin * 1.05f)); // You can also render text labels with world-space locations.
+                //node.labels.push_back(PathVisualizationLabel("res T: " + std::to_string(shadowRayRes.t) + ", distance: " + std::to_string(dis) + ", res == nullprs: " + std::to_string(shadowRayRes.tri == nullptr), hitOrigin * 1.05f)); // You can also render text labels with world-space locations.
                 //node.labels.push_back(PathVisualizationLabel("thetas: " + std::to_string(theta0) + ", " + std::to_string(thetaLight), result.point + result.tri->normal() * 0.05f)); // You can also render text labels with world-space locations.
-                node.labels.push_back(PathVisualizationLabel("shadow ray point: " + std::to_string(shadowRayRes.point.x) + ", " + std::to_string(shadowRayRes.point.y) + ", " + std::to_string(shadowRayRes.point.z), shadowRayRes.point)); // You can also render text labels with world-space locations.
-
-                node.labels.push_back(PathVisualizationLabel("PL: " + std::to_string(Pl.x) + ", " + std::to_string(Pl.y) + ", " + std::to_string(Pl.z), Pl)); // You can also render text labels with world-space locations.
-                
-                node.labels.push_back(PathVisualizationLabel("origin: " + std::to_string(hitOrigin.x) + ", " + std::to_string(hitOrigin.y) + ", " + std::to_string(hitOrigin.z), hitOrigin)); // You can also render text labels with world-space locations.
-
+                //node.labels.push_back(PathVisualizationLabel("shadow ray point: " + std::to_string(shadowRayRes.point.x) + ", " + std::to_string(shadowRayRes.point.y) + ", " + std::to_string(shadowRayRes.point.z), shadowRayRes.point)); // You can also render text labels with world-space locations.
+                //node.labels.push_back(PathVisualizationLabel("PL: " + std::to_string(Pl.x) + ", " + std::to_string(Pl.y) + ", " + std::to_string(Pl.z), Pl)); // You can also render text labels with world-space locations.
+                //node.labels.push_back(PathVisualizationLabel("origin: " + std::to_string(hitOrigin.x) + ", " + std::to_string(hitOrigin.y) + ", " + std::to_string(hitOrigin.z), hitOrigin)); // You can also render text labels with world-space locations.
+                node.labels.push_back(PathVisualizationLabel("normal: " + std::to_string(result.tri->normal().x) + ", " + std::to_string(result.tri->normal().y) + ", " + std::to_string(result.tri->normal().z), hitOrigin)); // You can also render text labels with world-space locations.
                 node.lines.push_back(PathVisualizationLine(light->getPosition(), light->getPosition() + light->getNormal() * .1f, Vec3f(1, 0, 1))); // You can give lines a color as optional parameter.
-
                 //node.labels.push_back(PathVisualizationLabel("diffuse: " + std::to_string(Ei.x) + ", " + std::to_string(Ei.y) + ", " + std::to_string(Ei.z), result.point)); // You can also render text labels with world-space locations.
-
-
 
                 visualization.push_back(node);
             }
@@ -338,7 +290,6 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
         // back to the loop
 
     }
-    //std::cout << "Ei: " << Ei << std::endl;
 	return Ei;
 }
 
@@ -404,27 +355,24 @@ void PathTraceRenderer::pathTraceBlock( MulticoreLauncher::Task& t )
         int pixel_y = block.m_y + (i / block.m_width);
         //std::cout << "x,y: " << pixel_x << ", " << pixel_y << std::endl;
         
-        
-
         // TODO add pixel filtering
 
         // random pixel samples for antialiasing
-        for (int i = 0; i < 9; ++i) {
+        for (int j = 0; j < 3; ++j) {
             float x_i = R.getF32(pixel_x, pixel_x + 1.0f);
             float y_i = R.getF32(pixel_y, pixel_y + 1.0f);
-            //
+            
             //float weight = boxFilter(x_i, y_i, pixel_x, pixel_y);
             //std::cout << "x,y: " << x0 << ", " << y0 << std::endl;
 
             //if (weight > 0.0f) {
-             Ei += tracePath(x_i, y_i, ctx, 0, R, dummyVisualization);
-             //w += weight;
+            Ei += tracePath(x_i, y_i, ctx, 0, R, dummyVisualization);
+            //w += weight;
             //}
-
         }
         
         // normalize by dividing with weight
-        Ei = Ei / 9;
+        Ei = Ei / 3;
         // Put pixel.
         Vec4f prev = image->getVec4f( Vec2i(pixel_x, pixel_y) );
         prev += Vec4f( Ei, 1.0f );

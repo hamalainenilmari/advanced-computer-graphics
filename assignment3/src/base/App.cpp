@@ -605,6 +605,8 @@ void App::renderFrame(GLContext* gl)
 	}
 
 	m_areaLight->setSize(Vec2f(m_lightSize));
+	//m_lightSize = 0.05f;
+	//m_areaLight->setSize(Vec2f(0.05f));
 	m_areaLight->draw(worldToCamera, projection);
 
 	if (m_clearVisualization)
@@ -713,7 +715,50 @@ void App::loadMesh(const String& fileName)
 		     end = path.find_last_of(".");
 
 	m_results.scene_name = path.substr(begin, end - begin);
+	
+	// if we are loading rendering competition scene, set unique light parameters
+	if (m_results.scene_name == "shed") {
+		std::cout << "Rendering competition shed scene, setting its unique light parameters" << std::endl;
+		
+		m_shedScene = true;
+		m_areaLight.reset(new AreaLight);
 
+		// table lamp lightbulb normal, area ligth should be oriented according to this
+		Vec3f areaLightOrientation(-0.235f, -0.927f, -0.294f);
+		areaLightOrientation.normalize();
+
+		Vec3f column3 = -areaLightOrientation;
+
+		Vec3f temp;
+		if (fabsf(column3.x) < fabsf(column3.y) && fabsf(column3.x) < fabsf(column3.z))
+			temp = Vec3f(1.0f, 0.0f, 0.0f);
+		else if (fabsf(column3.y) < fabsf(column3.z))
+			temp = Vec3f(0.0f, 1.0f, 0.0f);
+		else
+			temp = Vec3f(0.0f, 0.0f, 1.0f);
+
+		Vec3f column1 = cross(temp, column3);
+		column1.normalize();
+
+		Vec3f column2 = cross(column3, column1);
+		column2.normalize();
+
+		Mat3f orientation;
+		orientation.setCol(0, column1);
+		orientation.setCol(1, column2);
+		orientation.setCol(2, column3);
+		
+		// area light parameters
+		m_areaLight->setOrientation(orientation);
+		m_areaLight->setPosition(Vec3f(0.734f, 1.490f, 0.900f));
+		m_areaLight->setEmission(Vec3f(90.0f, 80.0f, 50.0f));
+		m_areaLight->setSize(Vec2f(0.05f));
+		m_lightSize = 0.05f;
+	}
+	else {
+		m_shedScene = false;
+	}
+	
 	std::cout << "Scene name: " << m_results.scene_name << std::endl;
 
 	m_window.showModalMessage(sprintf("Loading mesh from '%s'...", fileName.getPtr()));
@@ -821,7 +866,7 @@ void App::constructTracer()
 	m_rt.reset(new RayTracer());
 
 	// whether we want to try loading a saved hierarchy from disk
-	bool tryLoadHierarchy = true;
+	bool tryLoadHierarchy = false;
 
 	// always construct when measuring performance
 	if (m_settings.batch_render)

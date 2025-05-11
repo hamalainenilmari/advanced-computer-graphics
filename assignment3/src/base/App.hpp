@@ -164,6 +164,7 @@ private:
 	bool								m_clearVisualization = false;
     bool                                m_useBruteForcePT = false;
     bool                                m_useMIS = false;
+    bool                                m_shedScene = false; // check if we are rendering the shed (rendering competition) scene, which has unique parameters
 
 	std::vector<PathVisualizationNode> m_visualization;
 

@@ -300,7 +300,7 @@ void RayTracer::constructBvh(std::vector<RTTriangle>& triangles, std::vector<uin
 
     switch (m_bvh.splitMode()) {
     case SplitMode_SpatialMedian:
-        if (triCount > 6) { // this leaf node triangle size proved to be ok
+        if (triCount > 100) { // this leaf node triangle size proved to be ok
             //node.bb = computeBB(triangles, indiceList, start, end); // bounding box of the node
             uint32_t mid;
             // in this case only split by spacial median
@@ -318,7 +318,7 @@ void RayTracer::constructBvh(std::vector<RTTriangle>& triangles, std::vector<uin
         }
         break;
     case SplitMode_Sah:
-        if (triCount > 13) {
+        if (triCount > 1000) {
 
             uint32_t mid;
             AABB lBB, rBB;
@@ -385,6 +385,7 @@ void RayTracer::constructHierarchy(std::vector<RTTriangle>& triangles, SplitMode
     uint32_t start = 0;
     uint32_t end = m_triangles->size(); // index of "last" triangle in the scene
     m_bvh = Bvh(splitMode, start, end);
+    //m_bvh = Bvh(SplitMode_SpatialMedian, start, end);
 
     // then call the actual recursive builder with the root node
     constructBvh(triangles, m_bvh.getIndices(), m_bvh.root(), start, end);
@@ -470,7 +471,7 @@ RaycastResult RayTracer::traverseBvh(const Vec3f& orig, const Vec3f& dir, const 
     }
     else {
         // leaf node, check intersection between triangles in this node
-        float closest_t = 1.0f, closest_u = 0.0f, closest_v = 0.0f;
+        float closest_t = std::numeric_limits<float>::max(), closest_u = 0.0f, closest_v = 0.0f;
         int closest_i = -1;
 
         // loop through the triangles in the node
