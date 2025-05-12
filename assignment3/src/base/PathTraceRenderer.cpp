@@ -367,7 +367,7 @@ void PathTraceRenderer::pathTraceBlock( MulticoreLauncher::Task& t )
         // TODO add pixel filtering
 
         // random pixel samples for antialiasing
-        for (int j = 0; j < 3; ++j) {
+        for (int j = 0; j < 50; ++j) {
             float x_i = R.getF32(pixel_x, pixel_x + 1.0f);
             float y_i = R.getF32(pixel_y, pixel_y + 1.0f);
             
@@ -381,7 +381,7 @@ void PathTraceRenderer::pathTraceBlock( MulticoreLauncher::Task& t )
         }
         
         // normalize by dividing with weight
-        Ei = Ei / 3;
+        Ei = Ei / 50;
         // Put pixel.
         Vec4f prev = image->getVec4f( Vec2i(pixel_x, pixel_y) );
         prev += Vec4f( Ei, 1.0f );
