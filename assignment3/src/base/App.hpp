@@ -165,6 +165,8 @@ private:
     bool                                m_useBruteForcePT = false;
     bool                                m_useMIS = false;
     bool                                m_shedScene = false; // check if we are rendering the shed (rendering competition) scene, which has unique parameters
+    std::unique_ptr<AreaLight>          m_shedLight; // rendering competition scene uses two area light sources
+
 
 	std::vector<PathVisualizationNode> m_visualization;
 

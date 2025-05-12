@@ -100,8 +100,9 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
 	Image* image = ctx.m_image.get();
 	const CameraControls& cameraCtrl = *ctx.m_camera;
 	AreaLight* light = ctx.m_light;
+    AreaLight* otherLight = ctx.m_otherLight;
 
-    Vec3f emission = light->getEmission();                                     // E(y): radiance emitted from point y, if only one light source this is constant
+    //Vec3f emission = light->getEmission();                                     // E(y): radiance emitted from point y, if only one light source this is constant
 
 	// make sure we're on CPU
 	//image->getMutablePtr();
@@ -190,8 +191,16 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
             float pdfL; // probability distribution function of the light source sample
             Vec3f Pl;   // sampled point on the light source
 
+            if (ctx.m_shedScene) {
+                // which light source to use?
+                R.getF32(0.0f, 1.0f) > 0.50f ? ctx.m_otherLight->sample(pdfL, Pl, samplerBase, R) : ctx.m_light->sample(pdfL, Pl, samplerBase, R);
+            }
+            else {
+                ctx.m_light->sample(pdfL, Pl, samplerBase, R);
+            }
+
             // draw a point from light source surface for shadow ray tracing
-            ctx.m_light->sample(pdfL, Pl, samplerBase, R);
+            //ctx.m_light->sample(pdfL, Pl, samplerBase, R);
 
             // small offset to prevent self-shadowing
             Vec3f hitOrigin = result.point + smoothedN * eps;
@@ -217,7 +226,7 @@ Vec3f PathTraceRenderer::tracePath(float image_x, float image_y, PathTracerConte
         
                 // result += V(hit,y)*E(y,y->hit)*BRDF*cos*G(hit,y)/pdf1
                 // this is irradiance from light to the hit point (direct lighting)
-                Ei += throughput * (emission * brdf * theta0 * thetaLight) * r_cube * (1.0f / pdfL);
+                Ei += throughput * (shadowRayRes.tri->m_material->emission * brdf * theta0 * thetaLight) * r_cube * (1.0f / pdfL);
             }
  
 
@@ -380,7 +389,7 @@ void PathTraceRenderer::pathTraceBlock( MulticoreLauncher::Task& t )
     }
 }
 
-void PathTraceRenderer::startPathTracingProcess( const MeshWithColors* scene, AreaLight* light, RayTracer* rt, Image* dest, int bounces, const CameraControls& camera )
+void PathTraceRenderer::startPathTracingProcess( const MeshWithColors* scene, AreaLight* light, bool shedScene, AreaLight* otherLight, RayTracer* rt, Image* dest, int bounces, const CameraControls& camera )
 {
     FW_ASSERT( !m_context.m_bForceExit );
 
@@ -390,6 +399,8 @@ void PathTraceRenderer::startPathTracingProcess( const MeshWithColors* scene, Ar
     m_context.m_rt = rt;
     m_context.m_scene = scene;
     m_context.m_light = light;
+    m_context.m_shedScene = shedScene;
+    m_context.m_otherLight = otherLight;
     m_context.m_pass = 0;
     m_context.m_bounces = bounces;
     m_context.m_image.reset(new Image( dest->getSize(), ImageFormat::RGBA_Vec4f));

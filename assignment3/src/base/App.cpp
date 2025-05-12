@@ -437,7 +437,8 @@ bool App::handleEvent(const Window::Event& ev)
 				new (&m_img) Image(m_window.getSize(), ImageFormat::RGBA_Vec4f);	// placement new, will get autodestructed
 			}
 			m_pathtrace_renderer->setNormalMapped(m_normalMapped);
-			m_pathtrace_renderer->startPathTracingProcess(m_mesh.get(), m_areaLight.get(), m_rt.get(), &m_img, m_useRussianRoulette ? -m_numBounces : m_numBounces, m_cameraCtrl);
+			m_pathtrace_renderer->startPathTracingProcess(m_mesh.get(), m_areaLight.get(), m_shedScene, m_shedLight.get(), m_rt.get(), &m_img, m_useRussianRoulette ? -m_numBounces : m_numBounces, m_cameraCtrl);
+			//m_pathtrace_renderer->startPathTracingProcess(m_mesh.get(), m_areaLight.get(), m_rt.get(), &m_img, m_useRussianRoulette ? -m_numBounces : m_numBounces, m_cameraCtrl);
 		}
 		else
 		{
@@ -545,8 +546,7 @@ void App::renderFrame(GLContext* gl)
 			m_img.~Image();
 			new (&m_img) Image(m_window.getSize(), ImageFormat::RGBA_Vec4f);	// placement new, will get autodestructed
 		}
-
-		m_pathtrace_renderer->startPathTracingProcess(m_mesh.get(), m_areaLight.get(), m_rt.get(), &m_img, m_useRussianRoulette ? -m_numBounces : m_numBounces, m_cameraCtrl);
+		m_pathtrace_renderer->startPathTracingProcess(m_mesh.get(), m_areaLight.get(), m_shedScene, m_shedLight.get(), m_rt.get(), &m_img, m_useRussianRoulette ? -m_numBounces : m_numBounces, m_cameraCtrl);
 	}
 
 	glClearColor(0.2f, 0.4f, 0.8f, 1.0f);
@@ -608,6 +608,9 @@ void App::renderFrame(GLContext* gl)
 	//m_lightSize = 0.05f;
 	//m_areaLight->setSize(Vec2f(0.05f));
 	m_areaLight->draw(worldToCamera, projection);
+	if (m_shedScene) {
+		m_shedLight->draw(worldToCamera, projection);
+	}
 
 	if (m_clearVisualization)
 		m_visualization.clear();
@@ -722,9 +725,11 @@ void App::loadMesh(const String& fileName)
 		
 		m_shedScene = true;
 		m_areaLight.reset(new AreaLight);
+		m_shedLight.reset(new AreaLight);
 
-		// table lamp lightbulb normal, area ligth should be oriented according to this
-		Vec3f areaLightOrientation(-0.235f, -0.927f, -0.294f);
+		// table lamp lightbulb normal, area light should be oriented according to this
+		//Vec3f areaLightOrientation(-0.235f, -0.927f, -0.294f);
+		Vec3f areaLightOrientation(-0.235f, -1.327f, -0.100f);
 		areaLightOrientation.normalize();
 
 		Vec3f column3 = -areaLightOrientation;
@@ -751,9 +756,15 @@ void App::loadMesh(const String& fileName)
 		// area light parameters
 		m_areaLight->setOrientation(orientation);
 		m_areaLight->setPosition(Vec3f(0.734f, 1.490f, 0.900f));
-		m_areaLight->setEmission(Vec3f(90.0f, 80.0f, 50.0f));
-		m_areaLight->setSize(Vec2f(0.05f));
-		m_lightSize = 0.05f;
+		m_areaLight->setEmission(Vec3f(100.0f, 100.0f, 70.0f));
+		m_lightSize = 0.06f;
+		m_areaLight->setSize(Vec2f(m_lightSize));
+
+		//m_shedLight->setOrientation();
+		m_shedLight->setPosition(Vec3f(-0.894f, 1.862f, 4.065f));
+		//m_shedLight->setEmission(Vec3f());
+		m_shedLight->setSize(Vec2f(0.05f));
+
 	}
 	else {
 		m_shedScene = false;
@@ -848,6 +859,9 @@ void App::constructTracer()
 		}
 
 		m_areaLight->writeTriangles(m_rtTriangles);
+		if (m_shedScene) {
+			m_shedLight->writeTriangles(m_rtTriangles);
+		}
 
 	}
 

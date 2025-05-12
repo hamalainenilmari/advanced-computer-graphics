@@ -21,7 +21,7 @@ class GLContext;
 class AreaLight
 {
 public:
-    AreaLight() : m_E(100, 100, 100), m_size(0.25f, 0.25f) { m_material.diffuse = Vec4f(0.0f), m_material.specular = Vec3f(0.0f), m_material.emission = Vec3f(100.0f); }
+    AreaLight() : m_E(100, 60, 20), m_size(0.25f, 0.25f) { m_material.diffuse = Vec4f(0.0f), m_material.specular = Vec3f(0.0f), m_material.emission = Vec3f(100.0f); }
 
     // this function draws samples on the light source for computing direct illumination
     // the "base" input can be used for driving QMC samplers; unless you do something to it yourself, has no effect.

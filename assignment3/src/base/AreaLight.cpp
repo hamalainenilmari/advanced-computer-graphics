@@ -14,8 +14,9 @@ void AreaLight::draw(const Mat4f& worldToCamera, const Mat4f& projection) {
     Mat4f M = worldToCamera *m_xform * S;
     glLoadMatrixf((float*)&M);
     glBegin(GL_TRIANGLES);
-    //glColor3fv( &m_E.x );
-    glColor3f(m_E.x, m_E.y, m_E.z);
+    glColor3fv( &m_E.x );
+    //glColor3f(m_E.x, m_E.y, m_E.z);
+
     glVertex3f(1,1,0); glVertex3f(1,-1,0); glVertex3f( -1,-1,0 );
     glVertex3f(1,1,0); glVertex3f( -1,-1,0 ); glVertex3f(-1,1,0); 
     glEnd();
