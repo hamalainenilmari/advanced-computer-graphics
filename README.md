@@ -1,6 +1,6 @@
 # Advanced Computer Graphics
 
-Something
+This course explored modern rendering techniques through three progressive assignments: BVH acceleration for optimized ray tracing, radiosity methods for global illumination with Monte Carlo integration, and unbiased path tracing
 
 ## Assignment 1: Accelerated Ray Tracing
 
